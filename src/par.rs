@@ -4,7 +4,7 @@ use nom::{
     character::complete::{alpha1, alphanumeric1, digit0, digit1, multispace1},
     combinator::{all_consuming, consumed, eof, map, opt, peek, recognize, success, value},
     multi::{many0_count, many1, separated_list0},
-    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
+    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple}, Slice,
 };
 use nom_locate::LocatedSpan;
 use std::cell::RefCell;
@@ -179,7 +179,7 @@ fn expect<'s, O>(
         Ok((i, o)) => Ok((i, Some(o))),
         Err(nom::Err::Error(nom::error::Error { input: i, .. }))
         | Err(nom::Err::Failure(nom::error::Error { input: i, .. })) => {
-            i.extra.borrow_mut().errs.push(Error(i.into(), err_msg));
+            i.extra.borrow_mut().errs.push(Error(i.slice(0..1).into(), err_msg));
             Ok((i, None))
         }
         Err(e) => Err(e),
@@ -198,7 +198,7 @@ fn skip_err_until<'s, O1, O2>(
             i.extra
                 .borrow_mut()
                 .errs
-                .push(Error(i.into(), "invalid character"));
+                .push(Error(i.slice(0..1).into(), "invalid character"));
 
             // Recover to first position where f(i) succeeds or until(i) reached.
             loop {
