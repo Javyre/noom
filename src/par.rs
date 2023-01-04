@@ -333,7 +333,13 @@ fn parse_expr_primary<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
         map(parse_number, |n| Expr::Number(n)),
         map(parse_ident, |i| Expr::Ident(i)),
         map(parse_table, |t| Expr::Table(t)),
-        delimited(tok_tag("("), parse_expr, expect_tok_tag!(")")),
+        delimited(
+            tok_tag("("),
+            map(expect(parse_expr, "expected expression"), |e| {
+                e.unwrap_or(Expr::Error)
+            }),
+            expect_tok_tag!(")"),
+        ),
         map(
             delimited(
                 tok_tag(".{"),
@@ -378,7 +384,11 @@ macro_rules! defn_parse_lassoc {
             let (i, op) = opt(tok(alt(($(tag($ops)),+))))(i)?;
 
             if let Some(op) = op {
-                let (i, b) = $name(i)?;
+                let (i, b) = expect($name, "missing right hand side expression")(i)?;
+                let b = match b {
+                    Some(b) => b,
+                    None => Expr::Error,
+                };
                 return Ok((i, Expr::BinaryOp(Box::new(a), op, Box::new(b))));
             }
 
