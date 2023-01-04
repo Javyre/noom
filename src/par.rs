@@ -159,6 +159,18 @@ pub struct Table<'s> {
     entries: Vec<(TableKey<'s>, Expr<'s>)>,
 }
 
+/// For expected success in parasers past a backtrack boundary.
+///
+///             we can expect() to see '=' here with 100% confidence this isn't just a need for
+///             backtracking.
+///             v
+/// e.g.: let a = b;
+///       ^ 'let a' is a boundary into parsing the rest of the let statement with 100% confidence
+///         we won't have to backtrack past the 'let'
+///
+/// e.g.: a + b;
+///         ^ A rhs operand should come after '+'
+///
 fn expect<'s, O>(
     mut f: impl FnMut(Span<'s>) -> IResult<'s, O>,
     err_msg: &'static str,
