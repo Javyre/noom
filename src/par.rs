@@ -1,17 +1,13 @@
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take},
-    character::{
-        complete::{alpha1, alphanumeric1, digit0, digit1, multispace1},
-        *,
-    },
+    character::complete::{alpha1, alphanumeric1, digit0, digit1, multispace1},
     combinator::{all_consuming, consumed, eof, map, opt, peek, recognize, success, value},
-    multi::{many0, many0_count, many1, separated_list0},
+    multi::{many0_count, many1, separated_list0},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
-    Parser as NomParser, Slice,
 };
 use nom_locate::LocatedSpan;
-use std::{cell::RefCell, ops::Range};
+use std::cell::RefCell;
 
 use crate::err::Error;
 
@@ -194,7 +190,6 @@ fn skip_err_until<'s, O1, O2>(
 
             // Recover to first position where f(i) succeeds or until(i) reached.
             loop {
-                println!("{}: `{}...`", i.location_line(), &i.fragment()[..10]);
                 match until(i) {
                     // Act like a peek and don't advance i here.
                     Ok((_, _)) => return Ok((i, None)),
@@ -202,7 +197,6 @@ fn skip_err_until<'s, O1, O2>(
                 }
                 // take the invalid character
                 i = take::<usize, Span<'s>, NomError<'s>>(1usize)(i).unwrap().0;
-                println!("_{}: `{}...`", i.location_line(), &i.fragment()[..10]);
                 match f(i) {
                     Ok((i, o)) => return Ok((i, Some(o))),
                     Err(nom::Err::Error(nom::error::Error { input, .. }))
@@ -211,7 +205,6 @@ fn skip_err_until<'s, O1, O2>(
                     }
                     Err(e) => return Err(e),
                 }
-                println!("__{}: `{}...`", i.location_line(), &i.fragment()[..10]);
             }
         }
 
@@ -452,7 +445,7 @@ fn parse_block_body<'s, O>(
                 match stmt {
                     Stmt::Expr(e) => {
                         ret = Some(Box::new(e));
-                    },
+                    }
                     _ => {
                         i.extra.borrow_mut().errs.push(Error(
                             i.into(),
@@ -480,12 +473,11 @@ fn parse_block_body<'s, O>(
         }
         let i = outer_i;
 
-        Ok((i, Block{ stmts, ret }))
+        Ok((i, Block { stmts, ret }))
     }
 }
 
 pub fn parse_chunk<'s>(chunk: Span<'s>) -> (Block<'s>, Vec<Error>) {
-    // pub fn parse_chunk<'s>(chunk: Span<'s>) -> Block<'s> {
     (
         all_consuming(terminated(
             parse_block_body(|i| {

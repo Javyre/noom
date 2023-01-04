@@ -1,4 +1,55 @@
-use ::owo_colors::{OwoColorize, Stream::Stderr, Style};
+use std::{
+    any::{Any, TypeId},
+    fmt::Display,
+    io::Write,
+};
+
+use owo_colors::{OwoColorize, Style};
+
+fn get_stream_type<S: Any>() -> Option<owo_colors::Stream> {
+    let tid = TypeId::of::<S>();
+    if tid == TypeId::of::<std::io::Stderr>() {
+        Some(owo_colors::Stream::Stderr)
+    } else if tid == TypeId::of::<std::io::Stdout>() {
+        Some(owo_colors::Stream::Stdout)
+    } else {
+        None
+    }
+}
+
+enum MaybeStyled<'a, T: OwoColorize> {
+    Styled(&'a T, owo_colors::Stream, owo_colors::Style),
+    Unstyled(&'a T),
+}
+
+impl<'a, T: Display> Display for MaybeStyled<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Styled(s, stream, style) => {
+                write!(f, "{}", s.if_supports_color(*stream, |s| s.style(*style)))
+            }
+            Self::Unstyled(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+trait MaybeStyle: OwoColorize {
+    fn maybe_style<'a, S: Any + Write>(&'a self, stream: &S, style: Style)
+        -> MaybeStyled<'a, Self>;
+}
+
+impl<T: OwoColorize> MaybeStyle for T {
+    fn maybe_style<'a, S: Any + Write>(
+        &'a self,
+        _stream: &S,
+        style: Style,
+    ) -> MaybeStyled<'a, Self> {
+        match get_stream_type::<S>() {
+            Some(stream) => MaybeStyled::Styled(self, stream, style),
+            None => MaybeStyled::Unstyled(self),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Location {
@@ -21,21 +72,33 @@ impl<'s> From<crate::par::Span<'s>> for Location {
 pub struct Error(pub Location, pub &'static str);
 
 impl Error {
-    pub fn print(&self, fname: &str, file: &str) {
+    pub fn print(
+        &self,
+        out: &mut (impl Write + Any),
+        fname: &str,
+        file: &str,
+    ) -> std::io::Result<()> {
         let Location { line, col, .. } = self.0;
         let msg = self.1;
 
         let err_style = Style::new().red().bold();
 
-        eprint!(
+        write!(
+            out,
             "{fname}:{line}:{col}:{}{msg}\n",
-            "error: ".if_supports_color(Stderr, |t| t.style(err_style))
-        );
-        underline(file, self.0, self.0);
+            "error: ".maybe_style(out, err_style)
+        )?;
+        underline(out, file, self.0, self.0)?;
+        Ok(())
     }
 }
 
-fn underline(file: &str, beg: Location, end: Location) {
+fn underline(
+    out: &mut (impl Write + Any),
+    file: &str,
+    beg: Location,
+    end: Location,
+) -> std::io::Result<()> {
     // TODO: implement multi-line ranges
     assert_eq!(beg.line, end.line);
 
@@ -55,21 +118,30 @@ fn underline(file: &str, beg: Location, end: Location) {
             .map(|(i, _)| i)
             .unwrap_or(file[end.offset as usize..].len());
 
-    eprint!("| {}\n", &file[line_begin..line_end]);
+    write!(out, "| {}\n", &file[line_begin..line_end])?;
 
     let underline_style = Style::new().green().bold();
     let underline = format!("{0:^<1$}", "", ((end.col - beg.col) as usize).max(1));
 
-    eprint!(
+    write!(
+        out,
         "| {0: <1$}{2}\n",
         "",
         beg.col as usize - 1,
-        underline.if_supports_color(Stderr, |t| t.style(underline_style))
-    );
+        underline.maybe_style(out, underline_style)
+    )?;
+
+    Ok(())
 }
 
-pub fn print_file_errs(fname: &str, file: &str, errs: &Vec<Error>) {
+pub fn write_file_errs(
+    out: &mut (impl Write + Any),
+    fname: &str,
+    file: &str,
+    errs: &Vec<Error>,
+) -> std::io::Result<()> {
     for e in errs {
-        e.print(fname, file);
+        e.print(out, fname, file)?;
     }
+    Ok(())
 }
