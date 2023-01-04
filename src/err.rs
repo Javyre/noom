@@ -56,6 +56,7 @@ pub struct Location {
     line: u32,
     col: u32,
     offset: u32,
+    len: u32,
 }
 
 impl<'s> From<crate::par::Span<'s>> for Location {
@@ -64,6 +65,7 @@ impl<'s> From<crate::par::Span<'s>> for Location {
             line: span.location_line(),
             col: span.get_utf8_column() as u32,
             offset: span.location_offset() as u32,
+            len: span.len() as u32,
         }
     }
 }
@@ -88,7 +90,7 @@ impl Error {
             "{fname}:{line}:{col}:{}{msg}\n",
             "error: ".maybe_style(out, err_style)
         )?;
-        underline(out, file, self.0, self.0)?;
+        underline(out, file, self.0)?;
         Ok(())
     }
 }
@@ -96,38 +98,36 @@ impl Error {
 fn underline(
     out: &mut (impl Write + Any),
     file: &str,
-    beg: Location,
-    end: Location,
+    loc: Location,
 ) -> std::io::Result<()> {
-    // TODO: implement multi-line ranges
-    assert_eq!(beg.line, end.line);
+    // TODO: implement multi-line locations?
 
     // Find beggining and end of line.
-    let line_begin = file[0..beg.offset as usize]
+    let line_begin = file[0..loc.offset as usize]
         .char_indices()
         .into_iter()
         .rev()
         .find(|&(_, c)| c == '\n' || c == '\r')
         .map(|(i, _)| i + 1)
         .unwrap_or(0);
-    let line_end = end.offset as usize
-        + file[end.offset as usize..]
+    let line_end = (loc.offset + loc.len) as usize
+        + file[(loc.offset + loc.len) as usize..]
             .char_indices()
             .into_iter()
             .find(|&(_, c)| c == '\n' || c == '\r')
             .map(|(i, _)| i)
-            .unwrap_or(file[end.offset as usize..].len());
+            .unwrap_or(file[(loc.offset + loc.len) as usize..].len());
 
     write!(out, "| {}\n", &file[line_begin..line_end])?;
 
     let underline_style = Style::new().green().bold();
-    let underline = format!("{0:^<1$}", "", ((end.col - beg.col) as usize).max(1));
+    let underline = format!("{0:^<1$}", "", (loc.len as usize).max(1));
 
     write!(
         out,
         "| {0: <1$}{2}\n",
         "",
-        beg.col as usize - 1,
+        loc.col as usize - 1,
         underline.maybe_style(out, underline_style)
     )?;
 
