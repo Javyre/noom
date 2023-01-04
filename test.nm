@@ -1,0 +1,106 @@
+// vim:set ft=noom sw=4:
+// - expr
+// - stmt:
+// 	 - let (assign)
+
+let do_soemthing(a) = 123 + a;
+let do_soemthing(a) = .{
+	foo();
+	123 + a
+};
+
+132
+
+// let M = {
+//     front = b,
+//     back = a,
+//     // foo(a) = .{ let b = a; b }, // + 2,
+//     foo(a) = .{ 2 }, // + 2,
+//     foo = .(a){ 2 }, // + 2 },
+// };
+
+// let a = .(){
+//     let a(f, g) = .{ let a = 3; f(1, a) };
+//     let b() = 2;
+//     let c() = 3;
+//     
+//     for (i in @range(1, len(a), 2)) .{
+// 		print(i);
+// 		a()
+//     };
+//     
+//     for (i in ipairs(list)) .{
+// 		print({[i]=1, j, k});
+// 		break;
+//     };
+// 
+//     .(){
+// 	let c = f(3);
+// 	return c;
+// 	f(a, c)
+//     }()
+// };
+
+// local a
+// do
+//     local a, b
+//     a, b = 1, 2
+//     local __ret
+//     do
+// 	local c = 3 * b
+// 	__ret = a + c
+//     end
+//     a = __ret
+// end
+
+// let a = .{ let a = 2; a };
+//
+// local a
+// local __ret
+// do
+//     local a = 2
+//     __ret = a
+// end
+// a = __ret
+//
+// local a
+// do
+//     local _nms0_a = 2
+//     a = _nms0_a
+// end
+
+// M.front(test) = test;
+
+// const a = b;
+
+// Ctx.emit_assign(self, node) = .{ node };
+// Ctx.emit_assign(self, node) = .{ return node; }
+// Ctx.emit_assign(self, node) = node; // :: node
+
+// :: Ctx.emit_assign(Ctx, Node): Node
+
+// f(x) = x;
+
+// :: table.insert<T>(Table, T): void
+
+// table.insert({1, 2, 3}, 4);
+// table.insert('hello');
+
+// Ctx.emit_assign = .(self, node){ node };
+
+// call{b};
+// 
+// M.something = .(a, b){ 
+//     a
+// };
+// 
+// M.something(a, b) = .{ a };
+// 
+// M.something_else(a, b) = .{
+//     const ret = call_some(thing);
+//     then_do_a_thing();
+// 
+//     ret
+// };
+// 
+// return M;
