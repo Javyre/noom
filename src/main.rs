@@ -10,8 +10,8 @@ fn main() {
     let prog = r#"
 // test
 let do_something(thing) = .{
-    {hello = world, [123   = 234};;;
-    ^ 931248 *;
+    {hello = world, [(123   = 234};;;
+    ^ (1123 *;
     456;
     let a = b;
 };
@@ -22,7 +22,5 @@ let a = b;
     let state = RefCell::new(par::State::new());
     let (chunk, errs) = par::parse_chunk(par::Span::new_extra(prog, &state));
     println!("chunk: {chunk:#?}");
-    println!("errs: {errs:?}");
-
-    err::print_file_errs("-", prog, &errs);
+    err::write_file_errs(&mut std::io::stderr(), "-", prog, &errs).unwrap();
 }
