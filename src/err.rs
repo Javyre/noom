@@ -71,7 +71,13 @@ impl<'s> From<crate::par::Span<'s>> for Location {
 }
 
 #[derive(Debug)]
-pub struct Error(pub Location, pub &'static str);
+pub enum Level{
+    Error,
+    Warning,
+}
+
+#[derive(Debug)]
+pub struct Error(pub Level, pub Location, pub &'static str);
 
 impl Error {
     pub fn print(
@@ -80,17 +86,18 @@ impl Error {
         fname: &str,
         file: &str,
     ) -> std::io::Result<()> {
-        let Location { line, col, .. } = self.0;
-        let msg = self.1;
-
-        let err_style = Style::new().red().bold();
+        let Location { line, col, .. } = self.1;
+        let msg = self.2;
 
         write!(
             out,
             "{fname}:{line}:{col}:{}{msg}\n",
-            "error: ".maybe_style(out, err_style)
+            match self.0 {
+                Level::Error => "error: ".maybe_style(out, Style::new().red().bold()),
+                Level::Warning => "warning: ".maybe_style(out, Style::new().yellow().bold()),
+            }
         )?;
-        underline(out, file, self.0)?;
+        underline(out, file, self.1)?;
         Ok(())
     }
 }

@@ -9,7 +9,7 @@ use nom::{
 use nom_locate::LocatedSpan;
 use std::cell::RefCell;
 
-use crate::err::Error;
+use crate::err::{Error, Level};
 
 type NomError<'s> = nom::error::Error<Span<'s>>;
 pub type Span<'s> = LocatedSpan<&'s str, &'s RefCell<State>>;
@@ -179,7 +179,7 @@ fn expect<'s, O>(
         Ok((i, o)) => Ok((i, Some(o))),
         Err(nom::Err::Error(nom::error::Error { input: i, .. }))
         | Err(nom::Err::Failure(nom::error::Error { input: i, .. })) => {
-            i.extra.borrow_mut().errs.push(Error(i.slice(0..1).into(), err_msg));
+            i.extra.borrow_mut().errs.push(Error(Level::Error, i.slice(0..1).into(), err_msg));
             Ok((i, None))
         }
         Err(e) => Err(e),
@@ -198,7 +198,7 @@ fn skip_err_until<'s, O1, O2>(
             i.extra
                 .borrow_mut()
                 .errs
-                .push(Error(i.slice(0..1).into(), "invalid character"));
+                .push(Error(Level::Error, i.slice(0..1).into(), "invalid character"));
 
             // Recover to first position where f(i) succeeds or until(i) reached.
             loop {
@@ -470,6 +470,7 @@ fn parse_block_body<'s, O>(
                     }
                     _ => {
                         i.extra.borrow_mut().errs.push(Error(
+                            Level::Error,
                             i.into(),
                             "Expected expr as block return. Add a semicolon here.",
                         ));
@@ -488,7 +489,7 @@ fn parse_block_body<'s, O>(
                 i.extra
                     .borrow_mut()
                     .errs
-                    .push(Error(span.into(), "warning: remove these extra semicolons"))
+                    .push(Error(Level::Warning, span.into(), "remove these extra semicolons"))
             }
 
             outer_i = i;
