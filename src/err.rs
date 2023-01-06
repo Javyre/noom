@@ -71,7 +71,7 @@ impl<'s> From<crate::par::Span<'s>> for Location {
 }
 
 #[derive(Debug)]
-pub enum Level{
+pub enum Level {
     Error,
     Warning,
 }
@@ -80,7 +80,7 @@ pub enum Level{
 pub struct Error(pub Level, pub Location, pub &'static str);
 
 impl Error {
-    pub fn print(
+    pub fn write(
         &self,
         out: &mut (impl Write + Any),
         fname: &str,
@@ -102,11 +102,7 @@ impl Error {
     }
 }
 
-fn underline(
-    out: &mut (impl Write + Any),
-    file: &str,
-    loc: Location,
-) -> std::io::Result<()> {
+fn underline(out: &mut (impl Write + Any), file: &str, loc: Location) -> std::io::Result<()> {
     // TODO: implement multi-line locations?
 
     // Find beggining and end of line.
@@ -148,7 +144,7 @@ pub fn write_file_errs(
     errs: &Vec<Error>,
 ) -> std::io::Result<()> {
     for e in errs {
-        e.print(out, fname, file)?;
+        e.write(out, fname, file)?;
     }
     Ok(())
 }
