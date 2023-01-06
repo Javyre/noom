@@ -4,7 +4,8 @@ use nom::{
     character::complete::{alpha1, alphanumeric1, digit0, digit1, multispace1},
     combinator::{all_consuming, consumed, eof, map, opt, peek, recognize, success, value},
     multi::{many0_count, many1, separated_list0},
-    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple}, Slice,
+    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
+    Slice,
 };
 use nom_locate::LocatedSpan;
 use std::cell::RefCell;
@@ -113,8 +114,8 @@ impl<'s> nom::InputTake for Span<'s> {
 
 #[derive(Debug, PartialEq)]
 pub struct Block<'s> {
-    stmts: Vec<Stmt<'s>>,
-    ret: Option<Box<Expr<'s>>>,
+    pub stmts: Vec<Stmt<'s>>,
+    pub ret: Option<Box<Expr<'s>>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -139,12 +140,12 @@ pub enum Expr<'s> {
 
 #[derive(Debug, PartialEq)]
 pub struct Ident<'s> {
-    span: Span<'s>,
+    pub span: Span<'s>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Number<'s> {
-    span: Span<'s>,
+    pub span: Span<'s>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -155,8 +156,8 @@ pub enum TableKey<'s> {
 
 #[derive(Debug, PartialEq)]
 pub struct Table<'s> {
-    span: Span<'s>,
-    entries: Vec<(TableKey<'s>, Expr<'s>)>,
+    pub span: Span<'s>,
+    pub entries: Vec<(TableKey<'s>, Expr<'s>)>,
 }
 
 /// For expected success in parasers past a backtrack boundary.
@@ -179,7 +180,10 @@ fn expect<'s, O>(
         Ok((i, o)) => Ok((i, Some(o))),
         Err(nom::Err::Error(nom::error::Error { input: i, .. }))
         | Err(nom::Err::Failure(nom::error::Error { input: i, .. })) => {
-            i.extra.borrow_mut().errs.push(Error(Level::Error, i.slice(0..1).into(), err_msg));
+            i.extra
+                .borrow_mut()
+                .errs
+                .push(Error(Level::Error, i.slice(0..1).into(), err_msg));
             Ok((i, None))
         }
         Err(e) => Err(e),
@@ -195,10 +199,11 @@ fn skip_err_until<'s, O1, O2>(
 
         Err(nom::Err::Error(nom::error::Error { input: mut i, .. }))
         | Err(nom::Err::Failure(nom::error::Error { input: mut i, .. })) => {
-            i.extra
-                .borrow_mut()
-                .errs
-                .push(Error(Level::Error, i.slice(0..1).into(), "invalid character"));
+            i.extra.borrow_mut().errs.push(Error(
+                Level::Error,
+                i.slice(0..1).into(),
+                "invalid character",
+            ));
 
             // Recover to first position where f(i) succeeds or until(i) reached.
             loop {
@@ -486,10 +491,11 @@ fn parse_block_body<'s, O>(
 
             let (i, extra_semi) = opt(recognize(many1(tok_tag(";"))))(i)?;
             if let Some(span) = extra_semi {
-                i.extra
-                    .borrow_mut()
-                    .errs
-                    .push(Error(Level::Warning, span.into(), "remove these extra semicolons"))
+                i.extra.borrow_mut().errs.push(Error(
+                    Level::Warning,
+                    span.into(),
+                    "remove these extra semicolons",
+                ))
             }
 
             outer_i = i;

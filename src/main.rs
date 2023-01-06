@@ -1,7 +1,11 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, io::Write, process::exit};
+
+use err::Level;
 
 // mod lex;
+mod emit;
 mod err;
+mod luish;
 mod par;
 
 // use logos::Logos;
@@ -21,6 +25,17 @@ let a = b;
 
     let state = RefCell::new(par::State::new());
     let (chunk, errs) = par::parse_chunk(par::Span::new_extra(prog, &state));
-    println!("chunk: {chunk:#?}");
-    err::write_file_errs(&mut std::io::stderr(), "-", prog, &errs).unwrap();
+
+    let mut stderr = std::io::stderr();
+    err::write_file_errs(&mut stderr, "-", prog, &errs).unwrap();
+    stderr.flush().unwrap();
+
+    if !errs
+        .iter()
+        .any(|e| if let Level::Error = e.0 { true } else { false })
+    {
+        emit::emit_chunk(&mut std::io::stdout(), chunk).unwrap();
+    } else {
+        exit(1);
+    }
 }
