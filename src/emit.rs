@@ -69,7 +69,7 @@ fn emit_expr<'s>(out: &mut impl Write, mut indent: u16, expr: luish::Expr) -> st
             let body_len = body.len();
             for (i, stmt) in body.into_iter().enumerate() {
                 emit_stmt(out, indent, stmt)?;
-                if i < body_len-1 {
+                if i < body_len - 1 {
                     emit_newline(out, indent)?;
                 }
             }
@@ -109,21 +109,25 @@ fn emit_expr<'s>(out: &mut impl Write, mut indent: u16, expr: luish::Expr) -> st
     Ok(())
 }
 
-pub fn emit_stmt<'s>(out: &mut impl Write, mut indent: u16, stmt: luish::Stmt) -> std::io::Result<()> {
+pub fn emit_stmt<'s>(
+    out: &mut impl Write,
+    mut indent: u16,
+    stmt: luish::Stmt,
+) -> std::io::Result<()> {
     match stmt {
         luish::Stmt::Do(body) => {
             write!(out, "do")?;
-            indent +=1;
+            indent += 1;
 
             emit_newline(out, indent)?;
             let body_len = body.len();
             for (i, stmt) in body.into_iter().enumerate() {
                 emit_stmt(out, indent, stmt)?;
-                if i < body_len-1 {
+                if i < body_len - 1 {
                     emit_newline(out, indent)?;
                 }
             }
-            indent-=1;
+            indent -= 1;
             emit_newline(out, indent)?;
             write!(out, "end")?;
         }
