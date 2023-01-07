@@ -1,7 +1,7 @@
 use crate::err::Error;
 use crate::par;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Ident<'s> {
     Str(&'s str),
     Id(u32),
@@ -31,6 +31,12 @@ pub enum Expr<'s> {
     BinaryOp(Box<Expr<'s>>, &'s str, Box<Expr<'s>>),
 }
 
+enum Target<'s, 't> {
+    Assign(Ident<'s>),
+    Value(&'t mut Option<Expr<'s>>),
+    Return,
+}
+
 type Stmts<'s> = Vec<Stmt<'s>>;
 
 #[derive(Default)]
@@ -47,98 +53,141 @@ impl State {
     }
 }
 
+fn is_same_assign(id: Ident, val: &Expr) -> bool {
+    if let Expr::Ident(val_id) = val {
+        if *val_id == id {
+            return true;
+        }
+    }
+    false
+}
+
 fn luify_ident<'s>(id: par::Ident<'s>) -> Ident<'s> {
     Ident::Str(id.span.fragment())
 }
 
-fn luify_block_body<'s>(
+fn luify_block_body<'s, 't>(
     s: &mut State,
     out: &mut Stmts<'s>,
     stmts: Vec<par::Stmt<'s>>,
     ret: Option<par::Expr<'s>>,
-) -> Expr<'s> {
-    let mut ret_expr = Expr::Nil;
-
+    target: Target<'s, 't>,
+) {
     for stmt in stmts.into_iter() {
         luify_stmt(s, out, stmt);
     }
     if let Some(ret) = ret {
-        let ret_id = s.gen_id();
-        out.push(Stmt::Local(ret_id, None));
-
-        let ret = luify_expr(s, out, ret);
-        out.push(Stmt::Assign(ret_id, ret));
-        ret_expr = Expr::Ident(ret_id);
+        luify_expr(s, out, ret, target);
     }
-    ret_expr
 }
 
-fn luify_expr<'s>(s: &mut State, out: &mut Stmts<'s>, expr: par::Expr<'s>) -> Expr<'s> {
+// default target fulfillment
+fn fulfill_target<'s, 't>(
+    _s: &mut State,
+    out: &mut Stmts<'s>,
+    expr: Expr<'s>,
+    target: Target<'s, 't>,
+) {
+    match target {
+        Target::Return => out.push(Stmt::Return(expr)),
+        Target::Assign(target) => out.push(Stmt::Assign(target, expr)),
+        Target::Value(val) => *val = Some(expr),
+    }
+}
+
+fn luify_expr_val<'s>(s: &mut State, out: &mut Stmts<'s>, expr: par::Expr<'s>) -> Expr<'s> {
+    let mut expr_out = None;
+    luify_expr(s, out, expr, Target::Value(&mut expr_out));
+    expr_out.unwrap()
+}
+
+fn luify_expr<'s, 't>(
+    s: &mut State,
+    out: &mut Stmts<'s>,
+    expr: par::Expr<'s>,
+    target: Target<'s, 't>,
+) {
     match expr {
         par::Expr::Error => unreachable!("error node in ast"),
         par::Expr::Func(args, body) => {
             let mut body_out = Vec::new();
-            let ret = luify_expr(s, &mut body_out, *body);
-            body_out.push(Stmt::Return(ret));
+            luify_expr(s, &mut body_out, *body, Target::Return);
 
-            Expr::Func(
-                args.into_iter().map(|id| luify_ident(id)).collect(),
-                body_out,
-            )
+            fulfill_target(
+                s,
+                out,
+                Expr::Func(
+                    args.into_iter().map(|id| luify_ident(id)).collect(),
+                    body_out,
+                ),
+                target,
+            );
         }
         par::Expr::Call(fn_expr, args) => {
-            let fn_expr = luify_expr(s, out, *fn_expr);
+            let fn_expr = luify_expr_val(s, out, *fn_expr);
+
             let args = args
                 .into_iter()
-                .map(|arg| luify_expr(s, out, arg))
+                .map(|arg| luify_expr_val(s, out, arg))
                 .collect();
 
-            Expr::Call(Box::new(fn_expr), args)
+            fulfill_target(s, out, Expr::Call(Box::new(fn_expr), args), target);
         }
-        par::Expr::Ident(id) => Expr::Ident(luify_ident(id)),
-        par::Expr::Table(par::Table { entries, .. }) => Expr::Table(
-            entries
-                .into_iter()
-                .map(|(key, val)| {
-                    (
-                        match key {
-                            par::TableKey::Expr(key) => TableKey::Expr(luify_expr(s, out, key)),
-                            par::TableKey::Ident(key) => TableKey::Ident(luify_ident(key)),
-                        },
-                        luify_expr(s, out, val),
-                    )
-                })
-                .collect(),
-        ),
-        par::Expr::Number(par::Number { span }) => Expr::Verbatim(span.fragment()),
-        par::Expr::UnaryOp(op, expr) => Expr::UnaryOp(
-            match *op.fragment() {
-                "!" => "not",
-                "-" => "-",
-                _ => unimplemented!("unimplemented unary operator translation"),
-            },
-            Box::new(luify_expr(s, out, *expr)),
-        ),
-        par::Expr::BinaryOp(lhs, op, rhs) => Expr::BinaryOp(
-            Box::new(luify_expr(s, out, *lhs)),
-            match *op.fragment() {
-                "+" => "+",
-                "-" => "-",
-                "*" => "*",
-                "/" => "/",
-                "and" => "and",
-                "or" => "or",
-                _ => unreachable!("unimplemented binary operator translation"),
-            },
-            Box::new(luify_expr(s, out, *rhs)),
-        ),
+        par::Expr::Ident(id) => fulfill_target(s, out, Expr::Ident(luify_ident(id)), target),
+        par::Expr::Table(par::Table { entries, .. }) => {
+            let table = Expr::Table(
+                entries
+                    .into_iter()
+                    .map(|(key, val)| {
+                        (
+                            match key {
+                                par::TableKey::Expr(key) => {
+                                    TableKey::Expr(luify_expr_val(s, out, key))
+                                }
+                                par::TableKey::Ident(key) => TableKey::Ident(luify_ident(key)),
+                            },
+                            luify_expr_val(s, out, val),
+                        )
+                    })
+                    .collect(),
+            );
+            fulfill_target(s, out, table, target);
+        }
+        par::Expr::Number(par::Number { span }) => {
+            fulfill_target(s, out, Expr::Verbatim(span.fragment()), target)
+        }
+        par::Expr::UnaryOp(op, expr) => {
+            let unop = Expr::UnaryOp(
+                match *op.fragment() {
+                    "!" => "not",
+                    "-" => "-",
+                    _ => unimplemented!("unimplemented unary operator translation"),
+                },
+                Box::new(luify_expr_val(s, out, *expr)),
+            );
+            fulfill_target(s, out, unop, target)
+        }
+        par::Expr::BinaryOp(lhs, op, rhs) => {
+            let binop = Expr::BinaryOp(
+                Box::new(luify_expr_val(s, out, *lhs)),
+                match *op.fragment() {
+                    "+" => "+",
+                    "-" => "-",
+                    "*" => "*",
+                    "/" => "/",
+                    "and" => "and",
+                    "or" => "or",
+                    _ => unreachable!("unimplemented binary operator translation"),
+                },
+                Box::new(luify_expr_val(s, out, *rhs)),
+            );
+            fulfill_target(s, out, binop, target)
+        }
         par::Expr::Block(par::Block { stmts, ret }) => {
             let mut body_stmts = Vec::new();
-            let ret_expr = luify_block_body(s, &mut body_stmts, stmts, ret.map(|r| *r));
 
+            luify_block_body(s, &mut body_stmts, stmts, ret.map(|r| *r), target);
             out.push(Stmt::Do(body_stmts));
-
-            ret_expr
         }
     }
 }
@@ -148,15 +197,14 @@ fn luify_stmt<'s>(s: &mut State, out: &mut Stmts<'s>, stmt: par::Stmt<'s>) {
         par::Stmt::Error => unreachable!("error node in ast"),
         par::Stmt::Expr(par::Expr::Number(..)) | par::Stmt::Expr(par::Expr::Ident(..)) => {}
         par::Stmt::Expr(expr) => {
-            let expr = luify_expr(s, out, expr);
-            match expr {
-                Expr::Nil => {}
-                expr => out.push(Stmt::Local(s.gen_id(), Some(expr))),
-            }
+            let id = s.gen_id();
+            out.push(Stmt::Local(id, None));
+            luify_expr(s, out, expr, Target::Assign(id));
         }
         par::Stmt::Let(id, val) => {
-            let val = luify_expr(s, out, val);
-            out.push(Stmt::Local(luify_ident(id), Some(val)));
+            let id = luify_ident(id);
+            out.push(Stmt::Local(id, None));
+            luify_expr(s, out, val, Target::Assign(id));
         }
     }
 }
@@ -166,9 +214,5 @@ pub fn luify_chunk<'s>(
     out: &mut Stmts<'s>,
     par::Block { stmts, ret }: par::Block<'s>,
 ) {
-    let ret = luify_block_body(s, out, stmts, ret.map(|r| *r));
-    match ret {
-        Expr::Nil => {}
-        ret => out.push(Stmt::Return(ret)),
-    }
+    luify_block_body(s, out, stmts, ret.map(|r| *r), Target::Return);
 }
