@@ -111,7 +111,12 @@ fn luify_expr<'s, 't>(
         par::Expr::Error => unreachable!("error node in ast"),
         par::Expr::Func(args, body) => {
             let mut body_out = Vec::new();
-            luify_expr(s, &mut body_out, *body, Target::Return);
+            match *body {
+                par::Expr::Block(par::Block { stmts, ret }) => {
+                    luify_block_body(s, &mut body_out, stmts, ret.map(|e| *e), Target::Return)
+                }
+                body => luify_expr(s, &mut body_out, body, Target::Return),
+            }
 
             fulfill_target(
                 s,
