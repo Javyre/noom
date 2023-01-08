@@ -5,7 +5,7 @@ use nom::{
     combinator::{all_consuming, consumed, eof, map, opt, peek, recognize, success, value},
     multi::{many0_count, many1, separated_list0},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
-    Slice,
+    ExtendInto, Slice,
 };
 use nom_locate::LocatedSpan;
 use std::cell::RefCell;
@@ -469,22 +469,35 @@ fn parse_block_body<'s, O>(
 
             let (i, semi) = opt(tok_tag(";"))(i)?;
             if semi.is_none() {
-                match stmt {
-                    Stmt::Expr(e) => {
-                        ret = Some(Box::new(e));
-                    }
-                    _ => {
+                let (i, end) = peek(opt(block_end))(i)?;
+                match end {
+                    None => {
                         i.extra.borrow_mut().errs.push(Error(
                             Level::Error,
-                            i.into(),
-                            "Expected expr as block return. Add a semicolon here.",
+                            i.slice(0..1).into(),
+                            "Expected semicolon here.",
                         ));
                         stmts.push(stmt);
-                        ret = Some(Box::new(Expr::Error));
+                    }
+                    Some(_) => {
+                        match stmt {
+                            Stmt::Expr(e) => {
+                                ret = Some(Box::new(e));
+                            }
+                            _ => {
+                                i.extra.borrow_mut().errs.push(Error(
+                                    Level::Error,
+                                    i.slice(0..1).into(),
+                                    "Expected expr as block return. Add a semicolon here.",
+                                ));
+                                stmts.push(stmt);
+                                ret = Some(Box::new(Expr::Error));
+                            }
+                        }
+                        outer_i = i;
+                        break;
                     }
                 }
-                outer_i = i;
-                break;
             } else {
                 stmts.push(stmt);
             }
@@ -513,7 +526,7 @@ pub fn parse_chunk<'s>(chunk: Span<'s>) -> (Block<'s>, Vec<Error>) {
                 let (i, _) = ws(i)?;
                 eof(i)
             }),
-            ws,
+            terminated(ws, expect(eof, "expected EOF")),
         ))(chunk)
         .expect("parser cannot fail")
         .1,
