@@ -122,6 +122,8 @@ pub struct Block<'s> {
 pub enum Stmt<'s> {
     Error,
     Let(Ident<'s>, Expr<'s>),
+    // TODO: implement paths 'some.thing.foo'
+    Assign(Ident<'s>, Expr<'s>),
     Expr(Expr<'s>),
 }
 
@@ -438,8 +440,26 @@ fn parse_let<'s>(i: Span<'s>) -> IResult<'s, Stmt<'s>> {
     }
 }
 
+fn parse_assign<'s>(i: Span<'s>) -> IResult<'s, Stmt<'s>> {
+    let (i, ident) = parse_ident(i)?;
+    let (i, eq) = opt(tok_tag("="))(i)?;
+
+    match eq {
+        Some(_) => {
+            let (i, val) = parse_expr(i)?;
+            Ok((i, Stmt::Assign(ident, val)))
+        }
+        None => {
+            let (i, args) = delimited(tok_tag("("), parse_defn_args, expect_tok_tag!(")"))(i)?;
+            let (i, _) = tok_tag("=")(i)?;
+            let (i, body) = parse_expr(i)?;
+            Ok((i, Stmt::Assign(ident, Expr::Func(args, Box::new(body)))))
+        }
+    }
+}
+
 fn parse_stmt<'s>(i: Span<'s>) -> IResult<'s, Stmt<'s>> {
-    alt((parse_let, map(parse_expr, |e| Stmt::Expr(e))))(i)
+    alt((parse_let, parse_assign, map(parse_expr, |e| Stmt::Expr(e))))(i)
 }
 
 // Infallible (should be called once block has definitely begun via beginning of chunk or `.(){`, `.{`)
