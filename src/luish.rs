@@ -217,7 +217,11 @@ fn luify_stmt<'s>(s: &mut State, out: &mut Stmts<'s>, stmt: par::Stmt<'s>) {
         par::Stmt::Expr(par::Expr::Number(..)) | par::Stmt::Expr(par::Expr::Ident(..)) => {}
         par::Stmt::Expr(expr) => {
             let val = luify_expr_val(s, out, expr);
-            out.push(Stmt::Local(s.gen_id(), Some(val)));
+            match val {
+                Expr::Nil => {}
+                Expr::Call(fn_expr, args) => out.push(Stmt::Call(*fn_expr, args)),
+                val => out.push(Stmt::Local(s.gen_id(), Some(val))),
+            }
         }
         par::Stmt::Let(id, val) => {
             let id = luify_ident(id);
