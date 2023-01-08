@@ -457,7 +457,7 @@ fn parse_assign<'s>(i: Span<'s>) -> IResult<'s, Stmt<'s>> {
             Ok((i, Stmt::Assign(ident, val)))
         }
         None => {
-            let (i, args) = delimited(tok_tag("("), parse_defn_args, expect_tok_tag!(")"))(i)?;
+            let (i, args) = delimited(tok_tag("("), parse_defn_args, tok_tag(")"))(i)?;
             let (i, _) = tok_tag("=")(i)?;
             let (i, body) = parse_expr(i)?;
             Ok((i, Stmt::Assign(ident, Expr::Func(args, Box::new(body)))))
