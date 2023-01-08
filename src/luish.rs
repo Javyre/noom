@@ -78,6 +78,8 @@ fn luify_block_body<'s, 't>(
     }
     if let Some(ret) = ret {
         luify_expr(s, out, ret, target);
+    } else {
+        fulfill_target(s, out, Expr::Nil, target);
     }
 }
 
