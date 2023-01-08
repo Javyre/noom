@@ -202,14 +202,13 @@ fn luify_stmt<'s>(s: &mut State, out: &mut Stmts<'s>, stmt: par::Stmt<'s>) {
         par::Stmt::Error => unreachable!("error node in ast"),
         par::Stmt::Expr(par::Expr::Number(..)) | par::Stmt::Expr(par::Expr::Ident(..)) => {}
         par::Stmt::Expr(expr) => {
-            let id = s.gen_id();
-            out.push(Stmt::Local(id, None));
-            luify_expr(s, out, expr, Target::Assign(id));
+            let val = luify_expr_val(s, out, expr);
+            out.push(Stmt::Local(s.gen_id(), Some(val)));
         }
         par::Stmt::Let(id, val) => {
             let id = luify_ident(id);
-            out.push(Stmt::Local(id, None));
-            luify_expr(s, out, val, Target::Assign(id));
+            let val = luify_expr_val(s, out, val);
+            out.push(Stmt::Local(id, Some(val)));
         }
     }
 }
