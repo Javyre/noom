@@ -192,7 +192,20 @@ fn luify_expr<'s, 't>(
             let mut body_stmts = Vec::new();
 
             luify_block_body(s, &mut body_stmts, stmts, ret.map(|r| *r), target);
-            out.push(Stmt::Do(body_stmts));
+            match body_stmts.len() {
+                0 => {}
+                1 => match body_stmts.pop().unwrap() {
+                    Stmt::Local(_id, None) => {},
+                    Stmt::Local(Ident::Str(_), val@Some(_)) => {
+                        let id = s.gen_id();
+                        out.push(Stmt::Local(id, val));
+                    },
+
+                    stmt@Stmt::Local(Ident::Id(_), Some(_)) |
+                    stmt => out.push(stmt),
+                },
+                _ => out.push(Stmt::Do(body_stmts)),
+            }
         }
     }
 }
