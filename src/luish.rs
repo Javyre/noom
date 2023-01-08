@@ -195,14 +195,13 @@ fn luify_expr<'s, 't>(
             match body_stmts.len() {
                 0 => {}
                 1 => match body_stmts.pop().unwrap() {
-                    Stmt::Local(_id, None) => {},
-                    Stmt::Local(Ident::Str(_), val@Some(_)) => {
+                    Stmt::Local(_id, None) => {}
+                    Stmt::Local(Ident::Str(_), val @ Some(_)) => {
                         let id = s.gen_id();
                         out.push(Stmt::Local(id, val));
-                    },
+                    }
 
-                    stmt@Stmt::Local(Ident::Id(_), Some(_)) |
-                    stmt => out.push(stmt),
+                    stmt @ Stmt::Local(Ident::Id(_), Some(_)) | stmt => out.push(stmt),
                 },
                 _ => out.push(Stmt::Do(body_stmts)),
             }
