@@ -261,7 +261,14 @@ fn tok_tag<'s>(pat: &'static str) -> impl FnMut(Span<'s>) -> IResult<'s, Span<'s
 
 macro_rules! expect_tok_tag {
     ($pat:expr) => {
-        expect(tok_tag($pat), concat!("missing `", $pat, "`"))
+        if cfg!(debug_assertions) {
+            expect(
+                tok_tag($pat),
+                concat!("missing `", $pat, "`", " ", file!(), ":", line!()),
+            )
+        } else {
+            expect(tok_tag($pat), concat!("missing `", $pat, "`"))
+        }
     };
 }
 
