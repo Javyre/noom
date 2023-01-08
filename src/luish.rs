@@ -193,6 +193,17 @@ fn luify_expr<'s, 't>(
         par::Expr::Block(par::Block { stmts, ret }) => {
             let mut body_stmts = Vec::new();
 
+            // need to generate a temp variable to avoid binding to a shadowed var
+            let target = match (&ret, target) {
+                (&Some(_), Target::Value(val)) => {
+                    let id = s.gen_id();
+                    *val = Some(Expr::Ident(id));
+                    out.push(Stmt::Local(id, None));
+                    Target::Assign(id)
+                },
+                (_, target) => target,
+            };
+
             luify_block_body(s, &mut body_stmts, stmts, ret.map(|r| *r), target);
             match body_stmts.len() {
                 0 => {}
