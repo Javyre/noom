@@ -113,13 +113,13 @@ fn underline(out: &mut (impl Write + Any), file: &str, loc: Location) -> std::io
         .find(|&(_, c)| c == '\n' || c == '\r')
         .map(|(i, _)| i + 1)
         .unwrap_or(0);
-    let line_end = (loc.offset + loc.len) as usize
-        + file[(loc.offset + loc.len) as usize..]
+    let line_end = (loc.offset + loc.len - 1) as usize
+        + file[(loc.offset + loc.len - 1) as usize..]
             .char_indices()
             .into_iter()
             .find(|&(_, c)| c == '\n' || c == '\r')
             .map(|(i, _)| i)
-            .unwrap_or(file[(loc.offset + loc.len) as usize..].len());
+            .unwrap_or(file[(loc.offset + loc.len - 1) as usize..].len());
 
     write!(out, "| {}\n", &file[line_begin..line_end])?;
 
