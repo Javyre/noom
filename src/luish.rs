@@ -228,6 +228,11 @@ fn luify_stmt<'s>(s: &mut State, out: &mut Stmts<'s>, stmt: par::Stmt<'s>) {
             let val = luify_expr_val(s, out, val);
             out.push(Stmt::Local(id, Some(val)));
         }
+        par::Stmt::Assign(id, val) => {
+            let id = luify_ident(id);
+            let val = luify_expr_val(s, out, val);
+            out.push(Stmt::Assign(id, val));
+        }
     }
 }
 
