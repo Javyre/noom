@@ -230,7 +230,7 @@ fn skip_err_until<'s, O1, O2>(
 }
 
 fn parse_comment<'s>(i: Span<'s>) -> IResult<'s, Span<'s>> {
-    recognize(pair(tag("//"), is_not("\n\r")))(i)
+    recognize(pair(tag("//"), opt(is_not("\n\r"))))(i)
 }
 
 fn ws<'s>(i: Span<'s>) -> IResult<'s, Span<'s>> {
