@@ -155,6 +155,8 @@ pub enum Expr<'s> {
     Error,
     Ident(Ident<'s>),
     Number(Number<'s>),
+    String(Span<'s>),
+    Tag(Span<'s>),
     Table(Table<'s>),
     BinaryOp(Box<Expr<'s>>, Span<'s>, Box<Expr<'s>>),
     UnaryOp(Span<'s>, Box<Expr<'s>>),
@@ -470,10 +472,24 @@ fn parse_func<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
     Ok((i, Expr::Func(args, Box::new(Expr::Block(body)), ret_ty)))
 }
 
+fn parse_string<'s>(i: Span<'s>) -> IResult<'s, Span<'s>> {
+    alt((
+        tok(delimited(
+            tag("\""),
+            recognize(many0_count(alt((is_not("\"\\"), tag("\\\""))))),
+            expect(tag("\""), "expected closing string double-quote"),
+        )),
+        tok(delimited(
+            tag("'"),
+            recognize(many0_count(alt((is_not("'\\"), tag("\\'"))))),
+            expect(tag("'"), "expected closing string quote"),
+        )),
+    ))(i)
+}
+
 fn parse_expr_primary<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
     alt((
-        map(parse_number, |n| Expr::Number(n)),
-        map(parse_ident, |i| Expr::Ident(i)),
+        map(parse_string, |s| Expr::String(s)),
         map(parse_table, |t| Expr::Table(t)),
         delimited(
             tok_tag("("),
@@ -491,6 +507,21 @@ fn parse_expr_primary<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
             |b| Expr::Block(b),
         ),
         parse_func,
+        map(
+            preceded(
+                pair(ws, tag(".")),
+                expect(
+                    recognize(pair(
+                        alt((alpha1, tag("_"))),
+                        many0_count(alt((alphanumeric1, tag("_")))),
+                    )),
+                    "tag must be a valid identifier",
+                ),
+            ),
+            |s| s.map(|s| Expr::Tag(s)).unwrap_or(Expr::Error),
+        ),
+        map(parse_number, |n| Expr::Number(n)),
+        map(parse_ident, |i| Expr::Ident(i)),
     ))(i)
 }
 

@@ -22,6 +22,7 @@ pub enum TableKey<'s> {
 
 pub enum Expr<'s> {
     Nil,
+    String(&'s str),
     Ident(Ident<'s>),
     Verbatim(&'s str),
     Table(Vec<(TableKey<'s>, Expr<'s>)>),
@@ -159,6 +160,9 @@ fn luify_expr<'s, 't>(
                     .collect(),
             );
             fulfill_target(s, out, table, target);
+        }
+        par::Expr::String(span) | par::Expr::Tag(span) => {
+            fulfill_target(s, out, Expr::String(span.fragment()), target)
         }
         par::Expr::Number(par::Number { span }) => {
             fulfill_target(s, out, Expr::Verbatim(span.fragment()), target)

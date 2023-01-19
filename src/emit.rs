@@ -104,6 +104,7 @@ fn emit_expr<'s>(out: &mut impl Write, mut indent: u16, expr: luish::Expr) -> st
             emit_newline(out, indent)?;
             write!(out, "}}")?;
         }
+        luish::Expr::String(str) => write!(out, "\"{str}\"")?,
         luish::Expr::Verbatim(str) => write!(out, "{str}")?,
     }
     Ok(())
