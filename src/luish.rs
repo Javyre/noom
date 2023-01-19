@@ -22,10 +22,10 @@ pub enum TableKey<'s> {
 
 pub enum Expr<'s> {
     Nil,
-    String(&'s str),
+    String(&'s str, par::QuoteType),
     Ident(Ident<'s>),
     Verbatim(&'s str),
-    Table(Vec<(TableKey<'s>, Expr<'s>)>),
+    Table(Vec<(Option<TableKey<'s>>, Expr<'s>)>),
     Func(Vec<Ident<'s>>, Vec<Stmt<'s>>),
     Call(Box<Expr<'s>>, Vec<Expr<'s>>),
     UnaryOp(&'s str, Box<Expr<'s>>),
@@ -148,12 +148,12 @@ fn luify_expr<'s, 't>(
                     .into_iter()
                     .map(|(key, val)| {
                         (
-                            match key {
+                            key.map(|key| match key {
                                 par::TableKey::Expr(key) => {
                                     TableKey::Expr(luify_expr_val(s, out, key))
                                 }
                                 par::TableKey::Ident(key) => TableKey::Ident(luify_ident(key)),
-                            },
+                            }),
                             luify_expr_val(s, out, val),
                         )
                     })
@@ -161,9 +161,15 @@ fn luify_expr<'s, 't>(
             );
             fulfill_target(s, out, table, target);
         }
-        par::Expr::String(span) | par::Expr::Tag(span) => {
-            fulfill_target(s, out, Expr::String(span.fragment()), target)
+        par::Expr::String(span, q) => {
+            fulfill_target(s, out, Expr::String(span.fragment(), q), target)
         }
+        par::Expr::Tag(span) => fulfill_target(
+            s,
+            out,
+            Expr::String(span.fragment(), par::QuoteType::Single),
+            target,
+        ),
         par::Expr::Number(par::Number { span }) => {
             fulfill_target(s, out, Expr::Verbatim(span.fragment()), target)
         }

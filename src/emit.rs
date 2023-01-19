@@ -85,15 +85,17 @@ fn emit_expr<'s>(out: &mut impl Write, mut indent: u16, expr: luish::Expr) -> st
 
             let entries_len = entries.len();
             for (i, (key, val)) in entries.into_iter().enumerate() {
-                match key {
-                    luish::TableKey::Ident(id) => emit_ident(out, id)?,
-                    luish::TableKey::Expr(expr) => {
-                        write!(out, "[")?;
-                        emit_expr(out, indent, expr)?;
-                        write!(out, "]")?;
+                if let Some(key) = key {
+                    match key {
+                        luish::TableKey::Ident(id) => emit_ident(out, id)?,
+                        luish::TableKey::Expr(expr) => {
+                            write!(out, "[")?;
+                            emit_expr(out, indent, expr)?;
+                            write!(out, "]")?;
+                        }
                     }
+                    write!(out, " = ")?;
                 }
-                write!(out, " = ")?;
                 emit_expr(out, indent, val)?;
                 if i < entries_len - 1 {
                     write!(out, ",")?;
@@ -104,7 +106,8 @@ fn emit_expr<'s>(out: &mut impl Write, mut indent: u16, expr: luish::Expr) -> st
             emit_newline(out, indent)?;
             write!(out, "}}")?;
         }
-        luish::Expr::String(str) => write!(out, "\"{str}\"")?,
+        luish::Expr::String(str, par::QuoteType::Double) => write!(out, "\"{str}\"")?,
+        luish::Expr::String(str, par::QuoteType::Single) => write!(out, "\'{str}\'")?,
         luish::Expr::Verbatim(str) => write!(out, "{str}")?,
     }
     Ok(())

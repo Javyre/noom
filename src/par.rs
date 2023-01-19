@@ -151,11 +151,17 @@ pub enum Stmt<'s> {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum QuoteType {
+    Double,
+    Single,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Expr<'s> {
     Error,
     Ident(Ident<'s>),
     Number(Number<'s>),
-    String(Span<'s>),
+    String(Span<'s>, QuoteType),
     Tag(Span<'s>),
     Table(Table<'s>),
     BinaryOp(Box<Expr<'s>>, Span<'s>, Box<Expr<'s>>),
@@ -188,7 +194,7 @@ pub enum TableKey<'s> {
 #[derive(Debug, PartialEq)]
 pub struct Table<'s> {
     pub span: Span<'s>,
-    pub entries: Vec<(TableKey<'s>, Expr<'s>)>,
+    pub entries: Vec<(Option<TableKey<'s>>, Expr<'s>)>,
 }
 
 /// For expected success in parasers past a backtrack boundary.
@@ -422,15 +428,17 @@ fn parse_table<'s>(i: Span<'s>) -> IResult<'s, Table<'s>> {
             tok_tag("{"),
             separated_list0(
                 tok_tag(","),
-                separated_pair(
-                    alt((
-                        map(
-                            delimited(tok_tag("["), parse_expr, expect_tok_tag!("]")),
-                            |e| TableKey::Expr(e),
-                        ),
-                        map(parse_ident, |i| TableKey::Ident(i)),
+                pair(
+                    opt(terminated(
+                        alt((
+                            map(
+                                delimited(tok_tag("["), parse_expr, expect_tok_tag!("]")),
+                                |e| TableKey::Expr(e),
+                            ),
+                            map(parse_ident, |i| TableKey::Ident(i)),
+                        )),
+                        expect_tok_tag!("="),
                     )),
-                    expect_tok_tag!("="),
                     parse_expr,
                 ),
             ),
@@ -472,24 +480,30 @@ fn parse_func<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
     Ok((i, Expr::Func(args, Box::new(Expr::Block(body)), ret_ty)))
 }
 
-fn parse_string<'s>(i: Span<'s>) -> IResult<'s, Span<'s>> {
-    alt((
-        tok(delimited(
-            tag("\""),
-            recognize(many0_count(alt((is_not("\"\\"), tag("\\\""))))),
-            expect(tag("\""), "expected closing string double-quote"),
-        )),
-        tok(delimited(
-            tag("'"),
-            recognize(many0_count(alt((is_not("'\\"), tag("\\'"))))),
-            expect(tag("'"), "expected closing string quote"),
-        )),
-    ))(i)
+fn parse_string<'s>(i: Span<'s>) -> IResult<'s, (Span<'s>, QuoteType)> {
+    tok(alt((
+        map(
+            delimited(
+                tag("\""),
+                recognize(many0_count(alt((is_not("\"\\"), tag("\\\""))))),
+                expect(tag("\""), "expected closing string double-quote"),
+            ),
+            |s| (s, QuoteType::Double),
+        ),
+        map(
+            delimited(
+                tag("'"),
+                recognize(many0_count(alt((is_not("'\\"), tag("\\'"))))),
+                expect(tag("'"), "expected closing string quote"),
+            ),
+            |s| (s, QuoteType::Single),
+        ),
+    )))(i)
 }
 
 fn parse_expr_primary<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
     alt((
-        map(parse_string, |s| Expr::String(s)),
+        map(parse_string, |(s, q)| Expr::String(s, q)),
         map(parse_table, |t| Expr::Table(t)),
         delimited(
             tok_tag("("),
