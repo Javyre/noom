@@ -3,29 +3,33 @@ use nom::{
     bytes::complete::{is_not, tag, take},
     character::complete::{alpha1, alphanumeric1, digit0, digit1, multispace1},
     combinator::{all_consuming, consumed, eof, map, opt, peek, recognize, success, value},
-    multi::{many0_count, many1, separated_list0},
+    multi::{many0_count, many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
-    ExtendInto, Slice,
+    Slice,
 };
 use nom_locate::LocatedSpan;
-use std::cell::RefCell;
+use std::{cell::RefCell, marker::PhantomData};
 
 use crate::err::{Error, Level};
 
 type NomError<'s> = nom::error::Error<Span<'s>>;
-pub type Span<'s> = LocatedSpan<&'s str, &'s RefCell<State>>;
+pub type Span<'s> = LocatedSpan<&'s str, &'s RefCell<State<'s>>>;
 type IResult<'s, T, E = NomError<'s>> = nom::IResult<Span<'s>, T, E>;
 trait Parser<'s, O>: nom::Parser<Span<'s>, O, NomError<'s>> {}
 
 #[derive(Debug)]
-pub struct State {
+pub struct State<'s> {
     errs: Vec<Error>,
+    _phantom: PhantomData<&'s ()>,
     // TODO??: lookup table for user-defined operators and their precedence.
 }
 
-impl State {
+impl<'s> State<'s> {
     pub fn new() -> Self {
-        Self { errs: Vec::new() }
+        Self {
+            errs: Vec::new(),
+            _phantom: PhantomData,
+        }
     }
 }
 
@@ -113,6 +117,25 @@ impl<'s> nom::InputTake for Span<'s> {
 // }
 
 #[derive(Debug, PartialEq)]
+pub enum Type<'s> {
+    Error,
+    TypeIdent(Span<'s>, Vec<Type<'s>>),
+    Table {
+        entry_types: Vec<(TableTypeKey<'s>, Type<'s>)>,
+        // TODO: index types i.e. [i: number]: T
+    },
+    Func(Vec<Type<'s>>, Box<Type<'s>>),
+    Union(Vec<Type<'s>>),
+    Intersect(Vec<Type<'s>>),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum TableTypeKey<'s> {
+    Ident(Span<'s>),
+    Index(u32),
+}
+
+#[derive(Debug, PartialEq)]
 pub struct Block<'s> {
     pub stmts: Vec<Stmt<'s>>,
     pub ret: Option<Box<Expr<'s>>>,
@@ -121,7 +144,7 @@ pub struct Block<'s> {
 #[derive(Debug, PartialEq)]
 pub enum Stmt<'s> {
     Error,
-    Let(Ident<'s>, Expr<'s>),
+    Let(Ident<'s>, Option<Type<'s>>, Expr<'s>),
     // TODO: implement paths 'some.thing.foo'
     Assign(Ident<'s>, Expr<'s>),
     Expr(Expr<'s>),
@@ -136,7 +159,11 @@ pub enum Expr<'s> {
     BinaryOp(Box<Expr<'s>>, Span<'s>, Box<Expr<'s>>),
     UnaryOp(Span<'s>, Box<Expr<'s>>),
     Call(Box<Expr<'s>>, Vec<Expr<'s>>),
-    Func(Vec<Ident<'s>>, Box<Expr<'s>>),
+    Func(
+        Vec<(Ident<'s>, Option<Type<'s>>)>,
+        Box<Expr<'s>>,
+        Option<Type<'s>>,
+    ),
     Block(Block<'s>),
 }
 
@@ -272,6 +299,88 @@ macro_rules! expect_tok_tag {
     };
 }
 
+fn parse_type_primary<'s>(i: Span<'s>) -> IResult<'s, Type<'s>> {
+    alt((
+        map(
+            pair(
+                parse_ident,
+                map(
+                    opt(delimited(
+                        tok_tag("<"),
+                        separated_list1(tok_tag(","), parse_type),
+                        expect_tok_tag!(">"),
+                    )),
+                    |args| match args {
+                        Some(args) => args,
+                        None => vec![],
+                    },
+                ),
+            ),
+            |(id, params)| Type::TypeIdent(id.span, params),
+        ),
+        map(
+            pair(
+                delimited(
+                    tok_tag("("),
+                    separated_list0(tok_tag(","), parse_type),
+                    expect_tok_tag!(")"),
+                ),
+                preceded(expect_tok_tag!(":"), parse_type),
+            ),
+            |(args, ret)| Type::Func(args, Box::new(ret)),
+        ),
+        map(
+            delimited(
+                tok_tag("{"),
+                separated_list0(
+                    tok_tag(","),
+                    alt((
+                        map(parse_type, |t| (None, t)),
+                        separated_pair(map(parse_ident, |i| Some(i)), tok_tag(":"), parse_type),
+                    )),
+                ),
+                expect_tok_tag!("}"),
+            ),
+            |entry_types| Type::Table {
+                entry_types: entry_types
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (id, t))| match id {
+                        Some(id) => (TableTypeKey::Ident(id.span), t),
+                        None => (TableTypeKey::Index(i as u32), t),
+                    })
+                    .collect(),
+            },
+        ),
+    ))(i)
+}
+
+// TODO: make this efficient. associativity is irrelevant within a chain of the same operator and
+//       we should collect the terms into a single vec as opposed to a binary tree of pairs.
+fn parse_type_combination<'s>(i: Span<'s>) -> IResult<'s, Type<'s>> {
+    let (i, a) = parse_type_primary(i)?;
+    let (i, op) = opt(tok(alt((tok_tag("|"), tok_tag("&")))))(i)?;
+
+    if let Some(op) = op {
+        let (i, b) = expect(parse_type_combination, "missing right hand side type")(i)?;
+        let b = match b {
+            Some(b) => b,
+            None => Type::Error,
+        };
+        return match *op.fragment() {
+            "|" => Ok((i, Type::Union(vec![a, b]))),
+            "&" => Ok((i, Type::Intersect(vec![a, b]))),
+            _ => unreachable!("invalid operator"),
+        };
+    }
+
+    Ok((i, a))
+}
+
+fn parse_type<'s>(i: Span<'s>) -> IResult<'s, Type<'s>> {
+    parse_type_combination(i)
+}
+
 fn parse_ident<'s>(i: Span<'s>) -> IResult<'s, Ident<'s>> {
     tok(map(
         recognize(pair(
@@ -329,17 +438,36 @@ fn parse_table<'s>(i: Span<'s>) -> IResult<'s, Table<'s>> {
     )(i)
 }
 
-fn parse_defn_args<'s>(i: Span<'s>) -> IResult<'s, Vec<Ident<'s>>> {
-    separated_list0(tok_tag(","), parse_ident)(i)
+// this parser is infallible once a type declaration is found. So it is safe to directly register
+// the types into the context as this will not be backtracked from.
+fn parse_defn_args<'s>(i: Span<'s>) -> IResult<'s, Vec<(Ident<'s>, Option<Type<'s>>)>> {
+    separated_list0(
+        tok_tag(","),
+        pair(
+            parse_ident,
+            opt(preceded(
+                tok_tag(":"),
+                map(expect(parse_type, "expected type"), |t| {
+                    t.unwrap_or(Type::Error)
+                }),
+            )),
+        ),
+    )(i)
 }
 fn parse_func<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
     let (i, args) = delimited(tok_tag(".("), parse_defn_args, expect_tok_tag!(")"))(i)?;
+    let (i, ret_ty) = opt(preceded(
+        tok_tag(":"),
+        map(expect(parse_type, "expected type"), |t| {
+            t.unwrap_or(Type::Error)
+        }),
+    ))(i)?;
     let (i, body) = delimited(
         tok_tag("{"),
         parse_block_body(tok_tag("}")),
         expect_tok_tag!("}"),
     )(i)?;
-    Ok((i, Expr::Func(args, Box::new(Expr::Block(body)))))
+    Ok((i, Expr::Func(args, Box::new(Expr::Block(body)), ret_ty)))
 }
 
 fn parse_expr_primary<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
@@ -431,18 +559,35 @@ fn parse_expr<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
 fn parse_let<'s>(i: Span<'s>) -> IResult<'s, Stmt<'s>> {
     let (i, _) = tok_tag("let")(i)?;
     let (i, ident) = parse_ident(i)?;
-    let (i, eq) = opt(tok_tag("="))(i)?;
+    let (i, eq_ty) = opt(pair(
+        opt(preceded(
+            tok_tag(":"),
+            map(expect(parse_type, "expected type"), |t| {
+                t.unwrap_or(Type::Error)
+            }),
+        )),
+        tok_tag("="),
+    ))(i)?;
 
-    match eq {
-        Some(_) => {
+    match eq_ty {
+        Some((ty, _)) => {
             let (i, val) = parse_expr(i)?;
-            Ok((i, Stmt::Let(ident, val)))
+            Ok((i, Stmt::Let(ident, ty, val)))
         }
         None => {
             let (i, args) = delimited(tok_tag("("), parse_defn_args, expect_tok_tag!(")"))(i)?;
+            let (i, ret_ty) = opt(preceded(
+                tok_tag(":"),
+                map(expect(parse_type, "expected type"), |t| {
+                    t.unwrap_or(Type::Error)
+                }),
+            ))(i)?;
             let (i, _) = tok_tag("=")(i)?;
             let (i, body) = parse_expr(i)?;
-            Ok((i, Stmt::Let(ident, Expr::Func(args, Box::new(body)))))
+            Ok((
+                i,
+                Stmt::Let(ident, None, Expr::Func(args, Box::new(body), ret_ty)),
+            ))
         }
     }
 }
@@ -458,9 +603,18 @@ fn parse_assign<'s>(i: Span<'s>) -> IResult<'s, Stmt<'s>> {
         }
         None => {
             let (i, args) = delimited(tok_tag("("), parse_defn_args, tok_tag(")"))(i)?;
+            let (i, ret_ty) = opt(preceded(
+                tok_tag(":"),
+                map(expect(parse_type, "expected type"), |t| {
+                    t.unwrap_or(Type::Error)
+                }),
+            ))(i)?;
             let (i, _) = tok_tag("=")(i)?;
             let (i, body) = parse_expr(i)?;
-            Ok((i, Stmt::Assign(ident, Expr::Func(args, Box::new(body)))))
+            Ok((
+                i,
+                Stmt::Assign(ident, Expr::Func(args, Box::new(body), ret_ty)),
+            ))
         }
     }
 }

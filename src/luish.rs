@@ -111,7 +111,7 @@ fn luify_expr<'s, 't>(
 ) {
     match expr {
         par::Expr::Error => unreachable!("error node in ast"),
-        par::Expr::Func(args, body) => {
+        par::Expr::Func(args, body, _ret_ty) => {
             let mut body_out = Vec::new();
             match *body {
                 par::Expr::Block(par::Block { stmts, ret }) => {
@@ -124,7 +124,7 @@ fn luify_expr<'s, 't>(
                 s,
                 out,
                 Expr::Func(
-                    args.into_iter().map(|id| luify_ident(id)).collect(),
+                    args.into_iter().map(|(id, _ty)| luify_ident(id)).collect(),
                     body_out,
                 ),
                 target,
@@ -234,7 +234,7 @@ fn luify_stmt<'s>(s: &mut State, out: &mut Stmts<'s>, stmt: par::Stmt<'s>) {
                 val => out.push(Stmt::Local(s.gen_id(), Some(val))),
             }
         }
-        par::Stmt::Let(id, val) => {
+        par::Stmt::Let(id, _ty, val) => {
             let id = luify_ident(id);
             match val {
                 val @ par::Expr::Func(..) => {
