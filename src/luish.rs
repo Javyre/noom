@@ -45,6 +45,7 @@ enum Target<'s, 't> {
     Assign(Ident<'s>),
     Value(&'t RefCell<Option<Expr<'s>>>),
     Return,
+    None,
 }
 
 type Stmts<'s> = Vec<Stmt<'s>>;
@@ -98,7 +99,7 @@ fn luify_expr_stmts<'s, 't>(
     out: &mut Stmts<'s>,
     expr: par::Expr<'s>,
     target: Target<'s, 't>,
-){
+) {
     match expr {
         par::Expr::Block(par::Block { stmts, ret }) => {
             luify_block_body(s, out, stmts, ret.map(|e| *e), target)
@@ -109,7 +110,7 @@ fn luify_expr_stmts<'s, 't>(
 
 // default target fulfillment
 fn fulfill_target<'s, 't>(
-    _s: &mut State,
+    s: &mut State,
     out: &mut Stmts<'s>,
     expr: Expr<'s>,
     target: Target<'s, 't>,
@@ -118,6 +119,11 @@ fn fulfill_target<'s, 't>(
         Target::Return => out.push(Stmt::Return(expr)),
         Target::Assign(target) => out.push(Stmt::Assign(target, expr)),
         Target::Value(val) => *val.borrow_mut() = Some(expr),
+        Target::None => match expr {
+            Expr::Nil | Expr::String(..) | Expr::Verbatim(..) | Expr::Ident(..) => {}
+            Expr::Call(fn_expr, args) => out.push(Stmt::Call(*fn_expr, args)),
+            expr => out.push(Stmt::Local(s.gen_id(), Some(expr))),
+        },
     }
 }
 
@@ -287,15 +293,7 @@ fn luify_expr<'s, 't>(
 fn luify_stmt<'s>(s: &mut State, out: &mut Stmts<'s>, stmt: par::Stmt<'s>) {
     match stmt {
         par::Stmt::Error => unreachable!("error node in ast"),
-        par::Stmt::Expr(par::Expr::Number(..)) | par::Stmt::Expr(par::Expr::Ident(..)) => {}
-        par::Stmt::Expr(expr) => {
-            let val = luify_expr_val(s, out, expr);
-            match val {
-                Expr::Nil => {}
-                Expr::Call(fn_expr, args) => out.push(Stmt::Call(*fn_expr, args)),
-                val => out.push(Stmt::Local(s.gen_id(), Some(val))),
-            }
-        }
+        par::Stmt::Expr(expr) => luify_expr(s, out, expr, Target::None),
         par::Stmt::Let(id, _ty, val) => {
             let id = luify_ident(id);
             match val {
