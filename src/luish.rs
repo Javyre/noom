@@ -93,6 +93,20 @@ fn luify_block_body<'s, 't>(
     }
 }
 
+fn luify_expr_stmts<'s, 't>(
+    s: &mut State,
+    out: &mut Stmts<'s>,
+    expr: par::Expr<'s>,
+    target: Target<'s, 't>,
+){
+    match expr {
+        par::Expr::Block(par::Block { stmts, ret }) => {
+            luify_block_body(s, out, stmts, ret.map(|e| *e), target)
+        }
+        expr => luify_expr(s, out, expr, target),
+    }
+}
+
 // default target fulfillment
 fn fulfill_target<'s, 't>(
     _s: &mut State,
@@ -123,12 +137,7 @@ fn luify_expr<'s, 't>(
         par::Expr::Error => unreachable!("error node in ast"),
         par::Expr::Func(args, body, _ret_ty) => {
             let mut body_out = Vec::new();
-            match *body {
-                par::Expr::Block(par::Block { stmts, ret }) => {
-                    luify_block_body(s, &mut body_out, stmts, ret.map(|e| *e), Target::Return)
-                }
-                body => luify_expr(s, &mut body_out, body, Target::Return),
-            }
+            luify_expr_stmts(s, &mut body_out, *body, Target::Return);
 
             fulfill_target(
                 s,
@@ -256,21 +265,11 @@ fn luify_expr<'s, 't>(
             };
 
             let mut body_out = Vec::new();
-            match *body {
-                par::Expr::Block(par::Block { stmts, ret }) => {
-                    luify_block_body(s, &mut body_out, stmts, ret.map(|e| *e), target)
-                }
-                body => luify_expr(s, &mut body_out, body, target),
-            }
+            luify_expr_stmts(s, &mut body_out, *body, target);
 
             let else_body_out = else_body.map(|else_body| {
                 let mut else_body_out = Vec::new();
-                match *else_body {
-                    par::Expr::Block(par::Block { stmts, ret }) => {
-                        luify_block_body(s, &mut else_body_out, stmts, ret.map(|e| *e), target)
-                    }
-                    else_body => luify_expr(s, &mut else_body_out, else_body, target),
-                }
+                luify_expr_stmts(s, &mut else_body_out, *else_body, target);
                 else_body_out
             });
 
