@@ -235,6 +235,11 @@ pub enum Expr<'s> {
         Option<Type<'s>>,
     ),
     Block(Block<'s>),
+    If {
+        cond: Box<Expr<'s>>,
+        body: Box<Expr<'s>>,
+        else_body: Option<Box<Expr<'s>>>,
+    },
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -606,6 +611,21 @@ fn parse_expr_primary<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
                 ),
             ),
             |s| s.map(|s| Expr::Tag(s.into())).unwrap_or(Expr::Error),
+        ),
+        map(
+            preceded(
+                tok_tag("if"),
+                tuple((
+                    delimited(expect_tok_tag!("("), parse_expr, expect_tok_tag!(")")),
+                    parse_expr,
+                    opt(preceded(tok_tag("else"), parse_expr)),
+                )),
+            ),
+            |(cond, body, else_body)| Expr::If {
+                cond: Box::new(cond),
+                body: Box::new(body),
+                else_body: else_body.map(|b| Box::new(b)),
+            },
         ),
         map(parse_number, |n| Expr::Number(n)),
         map(parse_ident, |i| Expr::Ident(i)),

@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use crate::err::Error;
 use crate::par;
 
@@ -13,6 +15,12 @@ pub enum Stmt<'s> {
     Assign(Ident<'s>, Expr<'s>),
     Return(Expr<'s>),
     Do(Vec<Stmt<'s>>),
+    If {
+        cond: Expr<'s>,
+        body: Vec<Stmt<'s>>,
+        else_ifs: Vec<(Expr<'s>, Vec<Stmt<'s>>)>,
+        else_body: Option<Vec<Stmt<'s>>>,
+    },
 }
 
 pub enum TableKey<'s> {
@@ -32,9 +40,10 @@ pub enum Expr<'s> {
     BinaryOp(Box<Expr<'s>>, &'s str, Box<Expr<'s>>),
 }
 
+#[derive(Clone, Copy)]
 enum Target<'s, 't> {
     Assign(Ident<'s>),
-    Value(&'t mut Option<Expr<'s>>),
+    Value(&'t RefCell<Option<Expr<'s>>>),
     Return,
 }
 
@@ -94,14 +103,14 @@ fn fulfill_target<'s, 't>(
     match target {
         Target::Return => out.push(Stmt::Return(expr)),
         Target::Assign(target) => out.push(Stmt::Assign(target, expr)),
-        Target::Value(val) => *val = Some(expr),
+        Target::Value(val) => *val.borrow_mut() = Some(expr),
     }
 }
 
 fn luify_expr_val<'s>(s: &mut State, out: &mut Stmts<'s>, expr: par::Expr<'s>) -> Expr<'s> {
-    let mut expr_out = None;
-    luify_expr(s, out, expr, Target::Value(&mut expr_out));
-    expr_out.unwrap()
+    let expr_out = RefCell::new(None);
+    luify_expr(s, out, expr, Target::Value(&expr_out));
+    expr_out.into_inner().unwrap()
 }
 
 fn luify_expr<'s, 't>(
@@ -207,7 +216,7 @@ fn luify_expr<'s, 't>(
             let target = match (&ret, target) {
                 (&Some(_), Target::Value(val)) => {
                     let id = s.gen_id();
-                    *val = Some(Expr::Ident(id));
+                    *val.borrow_mut() = Some(Expr::Ident(id));
                     out.push(Stmt::Local(id, None));
                     Target::Assign(id)
                 }
@@ -228,6 +237,50 @@ fn luify_expr<'s, 't>(
                 },
                 _ => out.push(Stmt::Do(body_stmts)),
             }
+        }
+        par::Expr::If {
+            cond,
+            body,
+            else_body,
+        } => {
+            let cond = luify_expr_val(s, out, *cond);
+
+            let target = match target {
+                Target::Value(val) => {
+                    let id = s.gen_id();
+                    *val.borrow_mut() = Some(Expr::Ident(id));
+                    out.push(Stmt::Local(id, None));
+                    Target::Assign(id)
+                }
+                target => target,
+            };
+
+            let mut body_out = Vec::new();
+            match *body {
+                par::Expr::Block(par::Block { stmts, ret }) => {
+                    luify_block_body(s, &mut body_out, stmts, ret.map(|e| *e), target)
+                }
+                body => luify_expr(s, &mut body_out, body, target),
+            }
+
+            let else_body_out = else_body.map(|else_body| {
+                let mut else_body_out = Vec::new();
+                match *else_body {
+                    par::Expr::Block(par::Block { stmts, ret }) => {
+                        luify_block_body(s, &mut else_body_out, stmts, ret.map(|e| *e), target)
+                    }
+                    else_body => luify_expr(s, &mut else_body_out, else_body, target),
+                }
+                else_body_out
+            });
+
+            out.push(Stmt::If {
+                cond,
+                body: body_out,
+                // TODO: impl elseif chaining for flatter output
+                else_ifs: vec![],
+                else_body: else_body_out,
+            })
         }
     }
 }
