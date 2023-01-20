@@ -1,0 +1,42 @@
+---
+source: src/par_test.rs
+expression: "parse_snap(r\"\nlet f(a: number): number = a * 2;\n\")"
+---
+stmts:
+  - Let:
+      - span:
+          line: 2
+          col: 5
+          fragment: f
+      - ~
+      - Func:
+          - - - span:
+                  line: 2
+                  col: 7
+                  fragment: a
+              - TypeIdent:
+                  - line: 2
+                    col: 10
+                    fragment: number
+                  - []
+          - BinaryOp:
+              - Ident:
+                  span:
+                    line: 2
+                    col: 28
+                    fragment: a
+              - line: 2
+                col: 30
+                fragment: "*"
+              - Number:
+                  span:
+                    line: 2
+                    col: 32
+                    fragment: "2"
+          - TypeIdent:
+              - line: 2
+                col: 19
+                fragment: number
+              - []
+ret: ~
+

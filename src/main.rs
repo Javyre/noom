@@ -1,6 +1,4 @@
 use std::{
-    cell::RefCell,
-    default,
     fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -11,6 +9,7 @@ mod emit;
 mod err;
 mod luish;
 mod par;
+mod par_test;
 
 use clap::{Parser, Subcommand};
 
@@ -41,8 +40,7 @@ fn compile_file(input: &Path, output: &Path) {
         .read_to_string(&mut prog)
         .unwrap();
 
-    let state = RefCell::new(par::State::new());
-    let (chunk, errs) = par::parse_chunk(par::Span::new_extra(&prog, &state));
+    let (chunk, errs) = par::parse_chunk(&prog);
 
     let mut stderr = std::io::stderr();
     err::write_file_errs(&mut stderr, input.to_str().unwrap(), &prog, &errs).unwrap();

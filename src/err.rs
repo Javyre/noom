@@ -70,6 +70,17 @@ impl<'s> From<crate::par::Span<'s>> for Location {
     }
 }
 
+impl<'s, 't> From<crate::par::ISpan<'s, 't>> for Location {
+    fn from(span: crate::par::ISpan<'s, 't>) -> Self {
+        Self {
+            line: span.location_line(),
+            col: span.get_utf8_column() as u32,
+            offset: span.location_offset() as u32,
+            len: span.len() as u32,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Level {
     Error,

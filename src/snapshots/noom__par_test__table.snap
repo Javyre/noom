@@ -1,0 +1,108 @@
+---
+source: src/par_test.rs
+expression: "parse_snap(r\"\nlet foo = {\n    { abc = 'something', 123, 123 },\n    { [2] = 'something', 1, 123 },\n    { [asd] = 'other', 123, 544 }\n};\n\")"
+---
+stmts:
+  - Let:
+      - span:
+          line: 2
+          col: 5
+          fragment: foo
+      - ~
+      - Table:
+          span:
+            line: 2
+            col: 10
+            fragment: " {\n    { abc = 'something', 123, 123 },\n    { [2] = 'something', 1, 123 },\n    { [asd] = 'other', 123, 544 }\n}"
+          entries:
+            - - ~
+              - Table:
+                  span:
+                    line: 2
+                    col: 12
+                    fragment: "\n    { abc = 'something', 123, 123 }"
+                  entries:
+                    - - Ident:
+                          span:
+                            line: 3
+                            col: 7
+                            fragment: abc
+                      - String:
+                          - line: 3
+                            col: 14
+                            fragment: something
+                          - Single
+                    - - ~
+                      - Number:
+                          span:
+                            line: 3
+                            col: 26
+                            fragment: "123"
+                    - - ~
+                      - Number:
+                          span:
+                            line: 3
+                            col: 31
+                            fragment: "123"
+            - - ~
+              - Table:
+                  span:
+                    line: 3
+                    col: 37
+                    fragment: "\n    { [2] = 'something', 1, 123 }"
+                  entries:
+                    - - Expr:
+                          Number:
+                            span:
+                              line: 4
+                              col: 8
+                              fragment: "2"
+                      - String:
+                          - line: 4
+                            col: 14
+                            fragment: something
+                          - Single
+                    - - ~
+                      - Number:
+                          span:
+                            line: 4
+                            col: 26
+                            fragment: "1"
+                    - - ~
+                      - Number:
+                          span:
+                            line: 4
+                            col: 29
+                            fragment: "123"
+            - - ~
+              - Table:
+                  span:
+                    line: 4
+                    col: 35
+                    fragment: "\n    { [asd] = 'other', 123, 544 }"
+                  entries:
+                    - - Expr:
+                          Ident:
+                            span:
+                              line: 5
+                              col: 8
+                              fragment: asd
+                      - String:
+                          - line: 5
+                            col: 16
+                            fragment: other
+                          - Single
+                    - - ~
+                      - Number:
+                          span:
+                            line: 5
+                            col: 24
+                            fragment: "123"
+                    - - ~
+                      - Number:
+                          span:
+                            line: 5
+                            col: 29
+                            fragment: "544"
+ret: ~
+

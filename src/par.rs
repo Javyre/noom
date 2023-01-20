@@ -8,14 +8,76 @@ use nom::{
     Slice,
 };
 use nom_locate::LocatedSpan;
+use serde::ser::{SerializeStruct, Serializer};
+use serde::Serialize;
 use std::{cell::RefCell, marker::PhantomData};
 
 use crate::err::{Error, Level};
 
-type NomError<'s> = nom::error::Error<Span<'s>>;
-pub type Span<'s> = LocatedSpan<&'s str, &'s RefCell<State<'s>>>;
-type IResult<'s, T, E = NomError<'s>> = nom::IResult<Span<'s>, T, E>;
-trait Parser<'s, O>: nom::Parser<Span<'s>, O, NomError<'s>> {}
+// ISpan used as cursor during parsing but converted to Span when stored.
+type NomError<'s, 't> = nom::error::Error<ISpan<'s, 't>>;
+pub type ISpan<'s, 't> = LocatedSpan<&'s str, &'t RefCell<State<'s>>>;
+type IResult<'s, 't, T, E = NomError<'s, 't>> = nom::IResult<ISpan<'s, 't>, T, E>;
+trait Parser<'s: 't, 't, O>: nom::Parser<ISpan<'s, 't>, O, NomError<'s, 't>> {}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Span<'s> {
+    offset: usize,
+    line: u32,
+    fragment: &'s str,
+}
+
+impl<'s> Serialize for Span<'s> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("Span", 3)?;
+        state.serialize_field("line", &self.line)?;
+        state.serialize_field("col", &self.get_utf8_column())?;
+        state.serialize_field("fragment", &self.fragment)?;
+        state.end()
+    }
+}
+
+// match LocatedSpan's api for simplicity
+impl<'s> Span<'s> {
+    pub fn get_utf8_column(&self) -> usize {
+        Into::<LocatedSpan<&'s str, ()>>::into(*self).get_utf8_column()
+    }
+
+    pub fn location_offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn location_line(&self) -> u32 {
+        self.line
+    }
+
+    pub fn fragment(&self) -> &&'s str {
+        &self.fragment
+    }
+
+    pub fn len(&self) -> usize {
+        self.fragment.len()
+    }
+}
+
+impl<'s> Into<LocatedSpan<&'s str, ()>> for Span<'s> {
+    fn into(self) -> LocatedSpan<&'s str, ()> {
+        unsafe { LocatedSpan::new_from_raw_offset(self.offset, self.line, self.fragment, ()) }
+    }
+}
+
+impl<'s: 't, 't> From<ISpan<'s, 't>> for Span<'s> {
+    fn from(value: ISpan<'s, 't>) -> Self {
+        Self {
+            offset: value.location_offset(),
+            line: value.location_line(),
+            fragment: value.fragment(),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct State<'s> {
@@ -116,7 +178,7 @@ impl<'s> nom::InputTake for Span<'s> {
 //     }
 // }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub enum Type<'s> {
     Error,
     TypeIdent(Span<'s>, Vec<Type<'s>>),
@@ -129,19 +191,19 @@ pub enum Type<'s> {
     Intersect(Vec<Type<'s>>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub enum TableTypeKey<'s> {
     Ident(Span<'s>),
     Index(u32),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct Block<'s> {
     pub stmts: Vec<Stmt<'s>>,
     pub ret: Option<Box<Expr<'s>>>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub enum Stmt<'s> {
     Error,
     Let(Ident<'s>, Option<Type<'s>>, Expr<'s>),
@@ -150,13 +212,13 @@ pub enum Stmt<'s> {
     Expr(Expr<'s>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub enum QuoteType {
     Double,
     Single,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub enum Expr<'s> {
     Error,
     Ident(Ident<'s>),
@@ -175,23 +237,23 @@ pub enum Expr<'s> {
     Block(Block<'s>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct Ident<'s> {
     pub span: Span<'s>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct Number<'s> {
     pub span: Span<'s>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub enum TableKey<'s> {
     Expr(Expr<'s>),
     Ident(Ident<'s>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct Table<'s> {
     pub span: Span<'s>,
     pub entries: Vec<(Option<TableKey<'s>>, Expr<'s>)>,
@@ -209,10 +271,10 @@ pub struct Table<'s> {
 /// e.g.: a + b;
 ///         ^ A rhs operand should come after '+'
 ///
-fn expect<'s, O>(
-    mut f: impl FnMut(Span<'s>) -> IResult<'s, O>,
+fn expect<'s: 't, 't, O>(
+    mut f: impl FnMut(ISpan<'s, 't>) -> IResult<'s, 't, O>,
     err_msg: &'static str,
-) -> impl FnMut(Span<'s>) -> IResult<'s, Option<O>> {
+) -> impl FnMut(ISpan<'s, 't>) -> IResult<'s, 't, Option<O>> {
     move |i| match f(i) {
         Ok((i, o)) => Ok((i, Some(o))),
         Err(nom::Err::Error(nom::error::Error { input: i, .. }))
@@ -227,10 +289,10 @@ fn expect<'s, O>(
     }
 }
 
-fn skip_err_until<'s, O1, O2>(
-    mut until: impl FnMut(Span<'s>) -> IResult<'s, O1>,
-    mut f: impl FnMut(Span<'s>) -> IResult<'s, O2>,
-) -> impl FnMut(Span<'s>) -> IResult<'s, Option<O2>> {
+fn skip_err_until<'s: 't, 't, O1, O2>(
+    mut until: impl FnMut(ISpan<'s, 't>) -> IResult<'s, 't, O1>,
+    mut f: impl FnMut(ISpan<'s, 't>) -> IResult<'s, 't, O2>,
+) -> impl FnMut(ISpan<'s, 't>) -> IResult<'s, 't, Option<O2>> {
     move |i| match f(i) {
         Ok((i, o)) => Ok((i, Some(o))),
 
@@ -250,7 +312,9 @@ fn skip_err_until<'s, O1, O2>(
                     _ => {}
                 }
                 // take the invalid character
-                i = take::<usize, Span<'s>, NomError<'s>>(1usize)(i).unwrap().0;
+                i = take::<usize, ISpan<'s, 't>, NomError<'s, 't>>(1usize)(i)
+                    .unwrap()
+                    .0;
                 match f(i) {
                     Ok((i, o)) => return Ok((i, Some(o))),
                     Err(nom::Err::Error(nom::error::Error { input, .. }))
@@ -266,19 +330,23 @@ fn skip_err_until<'s, O1, O2>(
     }
 }
 
-fn parse_comment<'s>(i: Span<'s>) -> IResult<'s, Span<'s>> {
+fn parse_comment<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, ISpan<'s, 't>> {
     recognize(pair(tag("//"), opt(is_not("\n\r"))))(i)
 }
 
-fn ws<'s>(i: Span<'s>) -> IResult<'s, Span<'s>> {
+fn ws<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, ISpan<'s, 't>> {
     recognize(many0_count(alt((multispace1, parse_comment))))(i)
 }
 
-fn tok<'s, O>(f: impl FnMut(Span<'s>) -> IResult<'s, O>) -> impl FnMut(Span<'s>) -> IResult<'s, O> {
+fn tok<'s: 't, 't, O>(
+    f: impl FnMut(ISpan<'s, 't>) -> IResult<'s, 't, O>,
+) -> impl FnMut(ISpan<'s, 't>) -> IResult<'s, 't, O> {
     preceded(ws, f)
 }
 
-fn tok_tag<'s>(pat: &'static str) -> impl FnMut(Span<'s>) -> IResult<'s, Span<'s>> + Copy {
+fn tok_tag<'s: 't, 't>(
+    pat: &'static str,
+) -> impl FnMut(ISpan<'s, 't>) -> IResult<'s, 't, ISpan<'s, 't>> + Copy {
     move |i| match tok(tag(pat))(i) {
         Err(mut err @ nom::Err::Error(_)) | Err(mut err @ nom::Err::Failure(_)) => {
             match &mut err {
@@ -307,7 +375,7 @@ macro_rules! expect_tok_tag {
     };
 }
 
-fn parse_type_primary<'s>(i: Span<'s>) -> IResult<'s, Type<'s>> {
+fn parse_type_primary<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Type<'s>> {
     alt((
         map(
             pair(
@@ -365,7 +433,7 @@ fn parse_type_primary<'s>(i: Span<'s>) -> IResult<'s, Type<'s>> {
 
 // TODO: make this efficient. associativity is irrelevant within a chain of the same operator and
 //       we should collect the terms into a single vec as opposed to a binary tree of pairs.
-fn parse_type_combination<'s>(i: Span<'s>) -> IResult<'s, Type<'s>> {
+fn parse_type_combination<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Type<'s>> {
     let (i, a) = parse_type_primary(i)?;
     let (i, op) = opt(tok(alt((tok_tag("|"), tok_tag("&")))))(i)?;
 
@@ -385,44 +453,44 @@ fn parse_type_combination<'s>(i: Span<'s>) -> IResult<'s, Type<'s>> {
     Ok((i, a))
 }
 
-fn parse_type<'s>(i: Span<'s>) -> IResult<'s, Type<'s>> {
+fn parse_type<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Type<'s>> {
     parse_type_combination(i)
 }
 
-fn parse_ident<'s>(i: Span<'s>) -> IResult<'s, Ident<'s>> {
+fn parse_ident<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Ident<'s>> {
     tok(map(
         recognize(pair(
             alt((alpha1, tag("_"))),
             many0_count(alt((alphanumeric1, tag("_")))),
         )),
-        |span| Ident { span },
+        |span: ISpan| Ident { span: span.into() },
     ))(i)
 }
 
 #[test]
 fn test_parse_ident() {
     let state = RefCell::new(State::new());
-    let input = Span::new_extra("_foo_123 a", &state);
+    let input = ISpan::new_extra("_foo_123 a", &state);
     assert_eq!(
         parse_ident(input).unwrap().1,
         Ident {
-            span: input.slice(0..8)
+            span: input.slice(0..8).into()
         }
     );
 }
 
-fn parse_number<'s>(i: Span<'s>) -> IResult<'s, Number<'s>> {
+fn parse_number<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Number<'s>> {
     tok(map(
         alt((
             recognize(pair(alt((value((), tag("-")), success(()))), digit1)),
             recognize(tuple((tag("-"), digit1, tag("."), digit1))),
             recognize(tuple((digit0, tag("."), digit1))),
         )),
-        |span| Number { span },
+        |span: ISpan| Number { span: span.into() },
     ))(i)
 }
 
-fn parse_table<'s>(i: Span<'s>) -> IResult<'s, Table<'s>> {
+fn parse_table<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Table<'s>> {
     map(
         consumed(delimited(
             tok_tag("{"),
@@ -444,13 +512,18 @@ fn parse_table<'s>(i: Span<'s>) -> IResult<'s, Table<'s>> {
             ),
             expect_tok_tag!("}"),
         )),
-        |(span, entries)| Table { span, entries },
+        |(span, entries)| Table {
+            span: span.into(),
+            entries,
+        },
     )(i)
 }
 
 // this parser is infallible once a type declaration is found. So it is safe to directly register
 // the types into the context as this will not be backtracked from.
-fn parse_defn_args<'s>(i: Span<'s>) -> IResult<'s, Vec<(Ident<'s>, Option<Type<'s>>)>> {
+fn parse_defn_args<'s, 't>(
+    i: ISpan<'s, 't>,
+) -> IResult<'s, 't, Vec<(Ident<'s>, Option<Type<'s>>)>> {
     separated_list0(
         tok_tag(","),
         pair(
@@ -464,7 +537,7 @@ fn parse_defn_args<'s>(i: Span<'s>) -> IResult<'s, Vec<(Ident<'s>, Option<Type<'
         ),
     )(i)
 }
-fn parse_func<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
+fn parse_func<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     let (i, args) = delimited(tok_tag(".("), parse_defn_args, expect_tok_tag!(")"))(i)?;
     let (i, ret_ty) = opt(preceded(
         tok_tag(":"),
@@ -480,7 +553,7 @@ fn parse_func<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
     Ok((i, Expr::Func(args, Box::new(Expr::Block(body)), ret_ty)))
 }
 
-fn parse_string<'s>(i: Span<'s>) -> IResult<'s, (Span<'s>, QuoteType)> {
+fn parse_string<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, (ISpan<'s, 't>, QuoteType)> {
     tok(alt((
         map(
             delimited(
@@ -501,9 +574,9 @@ fn parse_string<'s>(i: Span<'s>) -> IResult<'s, (Span<'s>, QuoteType)> {
     )))(i)
 }
 
-fn parse_expr_primary<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
+fn parse_expr_primary<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     alt((
-        map(parse_string, |(s, q)| Expr::String(s, q)),
+        map(parse_string, |(s, q)| Expr::String(s.into(), q)),
         map(parse_table, |t| Expr::Table(t)),
         delimited(
             tok_tag("("),
@@ -532,14 +605,14 @@ fn parse_expr_primary<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
                     "tag must be a valid identifier",
                 ),
             ),
-            |s| s.map(|s| Expr::Tag(s)).unwrap_or(Expr::Error),
+            |s| s.map(|s| Expr::Tag(s.into())).unwrap_or(Expr::Error),
         ),
         map(parse_number, |n| Expr::Number(n)),
         map(parse_ident, |i| Expr::Ident(i)),
     ))(i)
 }
 
-fn parse_expr_call<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
+fn parse_expr_call<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     let (i, e) = parse_expr_primary(i)?;
     let (i, args) = opt(delimited(
         tok_tag("("),
@@ -554,11 +627,11 @@ fn parse_expr_call<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
     Ok((i, e))
 }
 
-fn parse_expr_unary<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
+fn parse_expr_unary<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     alt((
         map(
             pair(tok(alt((tag("-"), tag("!")))), parse_expr_unary),
-            |(o, e)| Expr::UnaryOp(o, Box::new(e)),
+            |(o, e)| Expr::UnaryOp(o.into(), Box::new(e)),
         ),
         parse_expr_call,
     ))(i)
@@ -566,7 +639,7 @@ fn parse_expr_unary<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
 
 macro_rules! defn_parse_lassoc {
     ($name:ident, term: $term_parser:expr, [$($ops:expr),+]) => {
-        fn $name<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
+        fn $name<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
             let (i, a) = $term_parser(i)?;
             let (i, op) = opt(tok(alt(($(tag($ops)),+))))(i)?;
 
@@ -576,7 +649,7 @@ macro_rules! defn_parse_lassoc {
                     Some(b) => b,
                     None => Expr::Error,
                 };
-                return Ok((i, Expr::BinaryOp(Box::new(a), op, Box::new(b))));
+                return Ok((i, Expr::BinaryOp(Box::new(a), op.into(), Box::new(b))));
             }
 
             Ok((i, a))
@@ -597,11 +670,11 @@ defn_parse_lassoc!(
     ["==", "!="]
 );
 
-fn parse_expr<'s>(i: Span<'s>) -> IResult<'s, Expr<'s>> {
+fn parse_expr<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     parse_expr_equality(i)
 }
 
-fn parse_let<'s>(i: Span<'s>) -> IResult<'s, Stmt<'s>> {
+fn parse_let<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
     let (i, _) = tok_tag("let")(i)?;
     let (i, ident) = parse_ident(i)?;
     let (i, eq_ty) = opt(pair(
@@ -637,7 +710,7 @@ fn parse_let<'s>(i: Span<'s>) -> IResult<'s, Stmt<'s>> {
     }
 }
 
-fn parse_assign<'s>(i: Span<'s>) -> IResult<'s, Stmt<'s>> {
+fn parse_assign<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
     let (i, ident) = parse_ident(i)?;
     let (i, eq) = opt(tok_tag("="))(i)?;
 
@@ -664,14 +737,14 @@ fn parse_assign<'s>(i: Span<'s>) -> IResult<'s, Stmt<'s>> {
     }
 }
 
-fn parse_stmt<'s>(i: Span<'s>) -> IResult<'s, Stmt<'s>> {
+fn parse_stmt<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
     alt((parse_let, parse_assign, map(parse_expr, |e| Stmt::Expr(e))))(i)
 }
 
 // Infallible (should be called once block has definitely begun via beginning of chunk or `.(){`, `.{`)
-fn parse_block_body<'s, O>(
-    block_end: impl Copy + FnMut(Span<'s>) -> IResult<'s, O>,
-) -> impl FnMut(Span<'s>) -> IResult<'s, Block<'s>> {
+fn parse_block_body<'s: 't, 't, O>(
+    block_end: impl Copy + FnMut(ISpan<'s, 't>) -> IResult<'s, 't, O>,
+) -> impl FnMut(ISpan<'s, 't>) -> IResult<'s, 't, Block<'s>> {
     move |mut outer_i| {
         // COMBAK: skip to before next semicolon on "invalid char" error
         let mut stmts = Vec::<Stmt<'s>>::with_capacity(5);
@@ -745,17 +818,19 @@ fn parse_block_body<'s, O>(
     }
 }
 
-pub fn parse_chunk<'s>(chunk: Span<'s>) -> (Block<'s>, Vec<Error>) {
-    (
-        all_consuming(terminated(
-            parse_block_body(|i| {
-                let (i, _) = ws(i)?;
-                eof(i)
-            }),
-            terminated(ws, expect(eof, "expected EOF")),
-        ))(chunk)
-        .expect("parser cannot fail")
-        .1,
-        chunk.extra.replace(State::new()).errs,
-    )
+pub fn parse_chunk<'s, 't>(chunk: &'s str) -> (Block<'s>, Vec<Error>) {
+    let state = RefCell::new(State::new());
+    let chunk_span = ISpan::new_extra(&chunk, &state);
+
+    let block = all_consuming(terminated(
+        parse_block_body(|i| {
+            let (i, _) = ws(i)?;
+            eof(i)
+        }),
+        terminated(ws, expect(eof, "expected EOF")),
+    ))(chunk_span)
+    .expect("parser cannot fail")
+    .1;
+
+    (block, state.into_inner().errs)
 }
