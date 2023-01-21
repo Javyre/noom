@@ -1,0 +1,55 @@
+---
+source: src/par_test.rs
+expression: "parse_snap(r\"\nif (1 + a > foo) .{\n    then_()\n} else .{\n    else_()\n};\n\")"
+---
+stmts:
+  - Expr:
+      If:
+        cond:
+          BinaryOp:
+            - BinaryOp:
+                - Number:
+                    span:
+                      line: 2
+                      col: 5
+                      fragment: "1"
+                - line: 2
+                  col: 7
+                  fragment: +
+                - Ident:
+                    span:
+                      line: 2
+                      col: 9
+                      fragment: a
+            - line: 2
+              col: 11
+              fragment: ">"
+            - Ident:
+                span:
+                  line: 2
+                  col: 13
+                  fragment: foo
+        body:
+          Block:
+            stmts: []
+            ret:
+              Call:
+                - Ident:
+                    span:
+                      line: 3
+                      col: 5
+                      fragment: then_
+                - []
+        else_body:
+          Block:
+            stmts: []
+            ret:
+              Call:
+                - Ident:
+                    span:
+                      line: 5
+                      col: 5
+                      fragment: else_
+                - []
+ret: ~
+

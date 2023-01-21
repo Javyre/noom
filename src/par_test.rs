@@ -63,3 +63,23 @@ test_par!(
 let f: (number): number = .(a){ a * 2 };
 "
 );
+
+test_par!(
+    test_if,
+    r"
+if (1 + a > foo) .{
+    then_()
+} else .{
+    else_()
+};
+"
+);
+
+test_par!(
+    test_if_2,
+    r"
+if (1 + a > foo) .{
+    then_()
+};
+"
+);
