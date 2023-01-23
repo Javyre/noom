@@ -39,7 +39,7 @@ let foo = {
 test_par!(
     test_func_assign,
     r"
-f(a: number): number = a * 2;
+f = .(a: number): number { a * 2 };
 "
 );
 

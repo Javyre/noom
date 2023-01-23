@@ -12,7 +12,7 @@ pub enum Ident<'s> {
 pub enum Stmt<'s> {
     Call(Expr<'s>, Vec<Expr<'s>>),
     Local(Ident<'s>, Option<Expr<'s>>),
-    Assign(Ident<'s>, Expr<'s>),
+    Assign(Expr<'s>, Expr<'s>),
     Return(Option<Expr<'s>>),
     Do(Vec<Stmt<'s>>),
     If {
@@ -125,7 +125,7 @@ fn fulfill_target<'s, 't>(
             Expr::Nil => out.push(Stmt::Return(None)),
             expr => out.push(Stmt::Return(Some(expr))),
         },
-        Target::Assign(target) => out.push(Stmt::Assign(target, expr)),
+        Target::Assign(target) => out.push(Stmt::Assign(Expr::Ident(target), expr)),
         Target::Value(val) => *val.borrow_mut() = Some(expr),
         Target::None => match expr {
             Expr::Nil | Expr::String(..) | Expr::Verbatim(..) | Expr::Ident(..) => {}
@@ -346,10 +346,10 @@ fn luify_stmt<'s>(s: &mut State, out: &mut Stmts<'s>, stmt: par::Stmt<'s>) {
                 }
             }
         }
-        par::Stmt::Assign(id, val) => {
-            let id = luify_ident(id);
+        par::Stmt::Assign(targ_expr, val) => {
+            let targ_expr = luify_expr_val(s, out, targ_expr);
             let val = luify_expr_val(s, out, val);
-            out.push(Stmt::Assign(id, val));
+            out.push(Stmt::Assign(targ_expr, val));
         }
         par::Stmt::For {
             it_var, it, body, ..

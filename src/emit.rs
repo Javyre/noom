@@ -214,8 +214,8 @@ pub fn emit_stmt<'s>(
                 emit_expr(out, indent, val)?;
             }
         }
-        luish::Stmt::Assign(id, val) => {
-            emit_ident(out, id)?;
+        luish::Stmt::Assign(target, val) => {
+            emit_expr(out, indent, target)?;
             write!(out, " = ")?;
             emit_expr(out, indent, val)?;
         }

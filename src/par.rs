@@ -208,7 +208,7 @@ pub enum Stmt<'s> {
     Error,
     Let(Ident<'s>, Option<Type<'s>>, Expr<'s>),
     // TODO: implement paths 'some.thing.foo'
-    Assign(Ident<'s>, Expr<'s>),
+    Assign(Expr<'s>, Expr<'s>),
     For {
         it_var: Ident<'s>,
         it_type: Option<Type<'s>>,
@@ -787,30 +787,29 @@ fn parse_let<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
     }
 }
 
-fn parse_assign<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
-    let (i, ident) = parse_ident(i)?;
+fn parse_assign_or_expr<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
+    let (i, target) = parse_expr(i)?;
     let (i, eq) = opt(tok_tag("="))(i)?;
 
     match eq {
-        Some(_) => {
+        Some(eq) => {
+            // Validate assignable expr
+            let target = match target {
+                Expr::Path(..) | Expr::Ident(..) => target,
+                _ => {
+                    i.extra.borrow_mut().errs.push(Error(
+                        Level::Error,
+                        eq.into(),
+                        "unexpected `=` here. This expression is not assignable.",
+                    ));
+                    Expr::Error
+                }
+            };
+
             let (i, val) = parse_expr(i)?;
-            Ok((i, Stmt::Assign(ident, val)))
+            Ok((i, Stmt::Assign(target, val)))
         }
-        None => {
-            let (i, args) = delimited(tok_tag("("), parse_defn_args, tok_tag(")"))(i)?;
-            let (i, ret_ty) = opt(preceded(
-                tok_tag(":"),
-                map(expect(parse_type, "expected type"), |t| {
-                    t.unwrap_or(Type::Error)
-                }),
-            ))(i)?;
-            let (i, _) = tok_tag("=")(i)?;
-            let (i, body) = parse_expr(i)?;
-            Ok((
-                i,
-                Stmt::Assign(ident, Expr::Func(args, Box::new(body), ret_ty)),
-            ))
-        }
+        None => Ok((i, Stmt::Expr(target))),
     }
 }
 
@@ -848,8 +847,7 @@ fn parse_stmt<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
         map(preceded(tok_tag("return"), opt(parse_expr)), |e| {
             Stmt::Return(e)
         }),
-        parse_assign,
-        map(parse_expr, |e| Stmt::Expr(e)),
+        parse_assign_or_expr,
     ))(i)
 }
 
