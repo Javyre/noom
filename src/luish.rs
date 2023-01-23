@@ -308,6 +308,12 @@ fn luify_expr<'s, 't>(
                 None => None,
             };
 
+            let else_body_out = match (else_body_out, target) {
+                (None, Target::Return) => Some(vec![Stmt::Return(None)]),
+                (None, _) => None,
+                (Some(else_body_out), _) => Some(else_body_out),
+            };
+
             out.push(Stmt::If {
                 cases,
                 else_body: else_body_out,
