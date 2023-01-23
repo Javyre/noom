@@ -16,9 +16,7 @@ pub enum Stmt<'s> {
     Return(Expr<'s>),
     Do(Vec<Stmt<'s>>),
     If {
-        cond: Expr<'s>,
-        body: Vec<Stmt<'s>>,
-        else_ifs: Vec<(Expr<'s>, Vec<Stmt<'s>>)>,
+        cases: Vec<(Expr<'s>, Vec<Stmt<'s>>)>,
         else_body: Option<Vec<Stmt<'s>>>,
     },
 }
@@ -253,13 +251,7 @@ fn luify_expr<'s, 't>(
                 _ => out.push(Stmt::Do(body_stmts)),
             }
         }
-        par::Expr::If {
-            cond,
-            body,
-            else_body,
-        } => {
-            let cond = luify_expr_val(s, out, *cond);
-
+        par::Expr::If { cases, else_body } => {
             let target = match target {
                 Target::Value(val) => {
                     let id = s.gen_id();
@@ -270,8 +262,16 @@ fn luify_expr<'s, 't>(
                 target => target,
             };
 
-            let mut body_out = Vec::new();
-            luify_expr_stmts(s, &mut body_out, *body, target);
+            let mut cases = cases
+                .into_iter()
+                .map(|(cond, body)| {
+                    let cond = luify_expr_val(s, out, cond);
+
+                    let mut body_out = Vec::new();
+                    luify_expr_stmts(s, &mut body_out, body, target);
+                    (cond, body_out)
+                })
+                .collect::<Vec<_>>();
 
             let else_body_out = else_body.map(|else_body| {
                 let mut else_body_out = Vec::new();
@@ -279,11 +279,28 @@ fn luify_expr<'s, 't>(
                 else_body_out
             });
 
+            let else_body_out = match else_body_out {
+                Some(else_body_out) => {
+                    if matches!(else_body_out.as_slice(), [Stmt::If { .. }]) {
+                        if let Stmt::If {
+                            cases: mut more_cases,
+                            else_body,
+                        } = else_body_out.into_iter().next().unwrap()
+                        {
+                            cases.append(&mut more_cases);
+                            else_body
+                        } else {
+                            unreachable!();
+                        }
+                    } else {
+                        Some(else_body_out)
+                    }
+                }
+                None => None,
+            };
+
             out.push(Stmt::If {
-                cond,
-                body: body_out,
-                // TODO: impl elseif chaining for flatter output
-                else_ifs: vec![],
+                cases,
                 else_body: else_body_out,
             })
         }

@@ -135,13 +135,12 @@ pub fn emit_stmt<'s>(
             emit_newline(out, indent)?;
             write!(out, "end")?;
         }
-        luish::Stmt::If {
-            cond,
-            body,
-            // TODO: elseif chains
-            else_ifs,
-            else_body,
-        } => {
+        luish::Stmt::If { cases, else_body } => {
+            let mut cases_it = cases.into_iter();
+            let (cond, body) = cases_it
+                .next()
+                .expect("if statement must have at least one condition.");
+
             write!(out, "if ")?;
             emit_expr(out, indent, cond)?;
             write!(out, " then")?;
@@ -158,6 +157,25 @@ pub fn emit_stmt<'s>(
 
             indent -= 1;
             emit_newline(out, indent)?;
+
+            for (cond, body) in cases_it {
+                write!(out, "elseif ")?;
+                emit_expr(out, indent, cond)?;
+                write!(out, " then")?;
+                indent += 1;
+
+                emit_newline(out, indent)?;
+                let body_len = body.len();
+                for (i, stmt) in body.into_iter().enumerate() {
+                    emit_stmt(out, indent, stmt)?;
+                    if i < body_len - 1 {
+                        emit_newline(out, indent)?;
+                    }
+                }
+
+                indent -= 1;
+                emit_newline(out, indent)?;
+            }
 
             if let Some(else_body) = else_body {
                 write!(out, "else")?;

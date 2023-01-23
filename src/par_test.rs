@@ -83,3 +83,13 @@ if (1 + a > foo) .{
 };
 "
 );
+
+test_par!(
+    test_if_3,
+    r"
+if (cond_a) foo()
+else if (cond_b) bar()
+else if (cond_c) baz()
+else baz();
+"
+);

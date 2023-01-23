@@ -236,8 +236,7 @@ pub enum Expr<'s> {
     ),
     Block(Block<'s>),
     If {
-        cond: Box<Expr<'s>>,
-        body: Box<Expr<'s>>,
+        cases: Vec<(Expr<'s>, Expr<'s>)>,
         else_body: Option<Box<Expr<'s>>>,
     },
 }
@@ -558,6 +557,42 @@ fn parse_func<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     Ok((i, Expr::Func(args, Box::new(Expr::Block(body)), ret_ty)))
 }
 
+fn parse_if<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
+    let (i, _) = tok_tag("if")(i)?;
+    let (i, cond) = delimited(expect_tok_tag!("("), parse_expr, expect_tok_tag!(")"))(i)?;
+    let (i, body) = parse_expr(i)?;
+
+    let mut cases = vec![(cond, body)];
+    let mut outer_i = i;
+    loop {
+        let i = outer_i;
+        match opt(pair(tok_tag("else"), tok_tag("if")))(i)? {
+            (i, Some(_)) => {
+                let (i, cond) =
+                    delimited(expect_tok_tag!("("), parse_expr, expect_tok_tag!(")"))(i)?;
+                let (i, body) = parse_expr(i)?;
+                cases.push((cond, body));
+                outer_i = i;
+            }
+            (i, None) => {
+                outer_i = i;
+                break;
+            }
+        }
+    }
+    let i = outer_i;
+
+    let (i, else_body) = opt(preceded(tok_tag("else"), parse_expr))(i)?;
+
+    Ok((
+        i,
+        Expr::If {
+            cases,
+            else_body: else_body.map(|b| Box::new(b)),
+        },
+    ))
+}
+
 fn parse_string<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, (ISpan<'s, 't>, QuoteType)> {
     tok(alt((
         map(
@@ -612,21 +647,7 @@ fn parse_expr_primary<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
             ),
             |s| s.map(|s| Expr::Tag(s.into())).unwrap_or(Expr::Error),
         ),
-        map(
-            preceded(
-                tok_tag("if"),
-                tuple((
-                    delimited(expect_tok_tag!("("), parse_expr, expect_tok_tag!(")")),
-                    parse_expr,
-                    opt(preceded(tok_tag("else"), parse_expr)),
-                )),
-            ),
-            |(cond, body, else_body)| Expr::If {
-                cond: Box::new(cond),
-                body: Box::new(body),
-                else_body: else_body.map(|b| Box::new(b)),
-            },
-        ),
+        parse_if,
         map(parse_number, |n| Expr::Number(n)),
         map(parse_ident, |i| Expr::Ident(i)),
     ))(i)

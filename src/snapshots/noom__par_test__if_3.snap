@@ -1,0 +1,54 @@
+---
+source: src/par_test.rs
+expression: "parse_snap(r\"\nif (cond_a) foo()\nelse if (cond_b) bar()\nelse if (cond_c) baz()\nelse baz();\n\")"
+---
+stmts:
+  - Expr:
+      If:
+        cases:
+          - - Ident:
+                span:
+                  line: 2
+                  col: 5
+                  fragment: cond_a
+            - Call:
+                - Ident:
+                    span:
+                      line: 2
+                      col: 13
+                      fragment: foo
+                - []
+          - - Ident:
+                span:
+                  line: 3
+                  col: 10
+                  fragment: cond_b
+            - Call:
+                - Ident:
+                    span:
+                      line: 3
+                      col: 18
+                      fragment: bar
+                - []
+          - - Ident:
+                span:
+                  line: 4
+                  col: 10
+                  fragment: cond_c
+            - Call:
+                - Ident:
+                    span:
+                      line: 4
+                      col: 18
+                      fragment: baz
+                - []
+        else_body:
+          Call:
+            - Ident:
+                span:
+                  line: 5
+                  col: 6
+                  fragment: baz
+            - []
+ret: ~
+
