@@ -13,7 +13,7 @@ pub enum Stmt<'s> {
     Call(Expr<'s>, Vec<Expr<'s>>),
     Local(Ident<'s>, Option<Expr<'s>>),
     Assign(Ident<'s>, Expr<'s>),
-    Return(Expr<'s>),
+    Return(Option<Expr<'s>>),
     Do(Vec<Stmt<'s>>),
     If {
         cases: Vec<(Expr<'s>, Vec<Stmt<'s>>)>,
@@ -120,7 +120,10 @@ fn fulfill_target<'s, 't>(
     target: Target<'s, 't>,
 ) {
     match target {
-        Target::Return => out.push(Stmt::Return(expr)),
+        Target::Return => match expr {
+            Expr::Nil => out.push(Stmt::Return(None)),
+            expr => out.push(Stmt::Return(Some(expr))),
+        },
         Target::Assign(target) => out.push(Stmt::Assign(target, expr)),
         Target::Value(val) => *val.borrow_mut() = Some(expr),
         Target::None => match expr {
@@ -350,6 +353,8 @@ fn luify_stmt<'s>(s: &mut State, out: &mut Stmts<'s>, stmt: par::Stmt<'s>) {
                 body: body_out,
             })
         }
+        par::Stmt::Return(Some(val)) => luify_expr(s, out, val, Target::Return),
+        par::Stmt::Return(None) => out.push(Stmt::Return(None)),
         par::Stmt::Break => out.push(Stmt::Break),
     }
 }

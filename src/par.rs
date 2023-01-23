@@ -216,6 +216,7 @@ pub enum Stmt<'s> {
         body: Expr<'s>,
     },
     Expr(Expr<'s>),
+    Return(Option<Expr<'s>>),
     Break,
 }
 
@@ -816,6 +817,9 @@ fn parse_stmt<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
         parse_let,
         parse_for,
         map(tok_tag("break"), |_| Stmt::Break),
+        map(preceded(tok_tag("return"), opt(parse_expr)), |e| {
+            Stmt::Return(e)
+        }),
         parse_assign,
         map(parse_expr, |e| Stmt::Expr(e)),
     ))(i)

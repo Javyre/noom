@@ -232,10 +232,11 @@ pub fn emit_stmt<'s>(
             emit_newline(out, indent)?;
             write!(out, "end")?;
         }
-        luish::Stmt::Return(val) => {
+        luish::Stmt::Return(Some(val)) => {
             write!(out, "return ")?;
             emit_expr(out, indent, val)?;
         }
+        luish::Stmt::Return(None) => write!(out, "return")?,
         luish::Stmt::Break => write!(out, "break")?,
     }
     Ok(())
