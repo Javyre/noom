@@ -41,6 +41,14 @@ fn emit_expr<'s>(out: &mut impl Write, mut indent: u16, expr: luish::Expr) -> st
     match expr {
         luish::Expr::Nil => write!(out, "nil")?,
         luish::Expr::Ident(id) => emit_ident(out, id)?,
+        luish::Expr::Path(expr, ids) => {
+            emit_expr(out, indent, *expr)?;
+
+            for id in ids.into_iter() {
+                write!(out, ".")?;
+                emit_ident(out, id)?;
+            }
+        }
         luish::Expr::UnaryOp(op, expr) => {
             write!(out, "{op} ")?;
             emit_expr(out, indent, *expr)?;

@@ -230,6 +230,7 @@ pub enum QuoteType {
 pub enum Expr<'s> {
     Error,
     Ident(Ident<'s>),
+    Path(Box<Expr<'s>>, Vec<Ident<'s>>),
     Number(Number<'s>),
     String(Span<'s>, QuoteType),
     Tag(Span<'s>),
@@ -661,28 +662,55 @@ fn parse_expr_primary<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     ))(i)
 }
 
-fn parse_expr_call<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
-    let (i, e) = parse_expr_primary(i)?;
-    let (i, args) = opt(delimited(
-        tok_tag("("),
-        separated_list0(tok_tag(","), parse_expr),
-        expect_tok_tag!(")"),
-    ))(i)?;
+fn parse_expr_unary_postfix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
+    let (i, mut e) = parse_expr_primary(i)?;
 
-    if let Some(args) = args {
-        return Ok((i, Expr::Call(Box::new(e), args)));
+    let mut outer_i = i;
+    loop {
+        let i = outer_i;
+
+        //
+        // Fn Call
+        //
+        let (i, args) = opt(delimited(
+            tok_tag("("),
+            separated_list0(tok_tag(","), parse_expr),
+            expect_tok_tag!(")"),
+        ))(i)?;
+
+        if let Some(args) = args {
+            outer_i = i;
+            e = Expr::Call(Box::new(e), args);
+            continue;
+        }
+
+        //
+        // Path
+        //
+        let (i, ids) = opt(preceded(
+            tok_tag("."),
+            separated_list1(tok_tag("."), parse_ident),
+        ))(i)?;
+        if let Some(ids) = ids {
+            outer_i = i;
+            e = Expr::Path(Box::new(e), ids);
+            continue;
+        }
+
+        break;
     }
+    let i = outer_i;
 
     Ok((i, e))
 }
 
-fn parse_expr_unary<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
+fn parse_expr_unary_prefix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     alt((
         map(
-            pair(tok(alt((tag("-"), tag("!")))), parse_expr_unary),
+            pair(tok(alt((tag("-"), tag("!")))), parse_expr_unary_prefix),
             |(o, e)| Expr::UnaryOp(o.into(), Box::new(e)),
         ),
-        parse_expr_call,
+        parse_expr_unary_postfix,
     ))(i)
 }
 
@@ -706,7 +734,7 @@ macro_rules! defn_parse_lassoc {
     };
 }
 
-defn_parse_lassoc!(parse_expr_factor, term: parse_expr_unary, ["*", "/"]);
+defn_parse_lassoc!(parse_expr_factor, term: parse_expr_unary_prefix, ["*", "/"]);
 defn_parse_lassoc!(parse_expr_term, term: parse_expr_factor, ["+", "-"]);
 defn_parse_lassoc!(
     parse_expr_comparison,
