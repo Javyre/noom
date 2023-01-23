@@ -1,0 +1,35 @@
+---
+source: src/par_test.rs
+expression: "parse_snap(r\"\nfor (i in ipairs(list)) .{\n    body\n};\n\")"
+---
+stmts:
+  - For:
+      it_var:
+        span:
+          line: 2
+          col: 6
+          fragment: i
+      it_type: ~
+      it:
+        Call:
+          - Ident:
+              span:
+                line: 2
+                col: 11
+                fragment: ipairs
+          - - Ident:
+                span:
+                  line: 2
+                  col: 18
+                  fragment: list
+      body:
+        Block:
+          stmts: []
+          ret:
+            Ident:
+              span:
+                line: 3
+                col: 5
+                fragment: body
+ret: ~
+

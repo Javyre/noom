@@ -93,3 +93,12 @@ else if (cond_c) baz()
 else baz();
 "
 );
+
+test_par!(
+    test_for,
+    r"
+for (i in ipairs(list)) .{
+    body
+};
+"
+);

@@ -209,6 +209,12 @@ pub enum Stmt<'s> {
     Let(Ident<'s>, Option<Type<'s>>, Expr<'s>),
     // TODO: implement paths 'some.thing.foo'
     Assign(Ident<'s>, Expr<'s>),
+    For {
+        it_var: Ident<'s>,
+        it_type: Option<Type<'s>>,
+        it: Expr<'s>,
+        body: Expr<'s>,
+    },
     Expr(Expr<'s>),
 }
 
@@ -778,8 +784,39 @@ fn parse_assign<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
     }
 }
 
+fn parse_for<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
+    let (i, _) = tok_tag("for")(i)?;
+    let (i, _) = expect_tok_tag!("(")(i)?;
+    let (i, it_var) = parse_ident(i)?;
+    let (i, it_type) = opt(preceded(
+        tok_tag(":"),
+        map(expect(parse_type, "expected type"), |t| {
+            t.unwrap_or(Type::Error)
+        }),
+    ))(i)?;
+    let (i, _) = expect_tok_tag!("in")(i)?;
+    let (i, it) = parse_expr(i)?;
+    let (i, _) = expect_tok_tag!(")")(i)?;
+    let (i, body) = parse_expr(i)?;
+
+    Ok((
+        i,
+        Stmt::For {
+            it_var,
+            it_type,
+            it,
+            body,
+        },
+    ))
+}
+
 fn parse_stmt<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
-    alt((parse_let, parse_assign, map(parse_expr, |e| Stmt::Expr(e))))(i)
+    alt((
+        parse_let,
+        parse_for,
+        parse_assign,
+        map(parse_expr, |e| Stmt::Expr(e)),
+    ))(i)
 }
 
 // Infallible (should be called once block has definitely begun via beginning of chunk or `.(){`, `.{`)

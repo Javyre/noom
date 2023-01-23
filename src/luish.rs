@@ -19,6 +19,11 @@ pub enum Stmt<'s> {
         cases: Vec<(Expr<'s>, Vec<Stmt<'s>>)>,
         else_body: Option<Vec<Stmt<'s>>>,
     },
+    For {
+        it_var: Ident<'s>,
+        it: Expr<'s>,
+        body: Vec<Stmt<'s>>,
+    },
 }
 
 pub enum TableKey<'s> {
@@ -328,6 +333,21 @@ fn luify_stmt<'s>(s: &mut State, out: &mut Stmts<'s>, stmt: par::Stmt<'s>) {
             let id = luify_ident(id);
             let val = luify_expr_val(s, out, val);
             out.push(Stmt::Assign(id, val));
+        }
+        par::Stmt::For {
+            it_var, it, body, ..
+        } => {
+            let it_var = luify_ident(it_var);
+            let it = luify_expr_val(s, out, it);
+
+            let mut body_out = Vec::new();
+            luify_expr_stmts(s, &mut body_out, body, Target::None);
+
+            out.push(Stmt::For {
+                it_var,
+                it,
+                body: body_out,
+            })
         }
     }
 }

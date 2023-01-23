@@ -211,6 +211,27 @@ pub fn emit_stmt<'s>(
             write!(out, " = ")?;
             emit_expr(out, indent, val)?;
         }
+        luish::Stmt::For { it_var, it, body } => {
+            write!(out, "for ")?;
+            emit_ident(out, it_var)?;
+            write!(out, " in ")?;
+            emit_expr(out, indent, it)?;
+            write!(out, " do")?;
+            indent += 1;
+
+            emit_newline(out, indent)?;
+            let body_len = body.len();
+            for (i, stmt) in body.into_iter().enumerate() {
+                emit_stmt(out, indent, stmt)?;
+                if i < body_len - 1 {
+                    emit_newline(out, indent)?;
+                }
+            }
+
+            indent -= 1;
+            emit_newline(out, indent)?;
+            write!(out, "end")?;
+        }
         luish::Stmt::Return(val) => {
             write!(out, "return ")?;
             emit_expr(out, indent, val)?;
