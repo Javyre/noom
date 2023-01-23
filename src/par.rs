@@ -501,16 +501,16 @@ fn parse_table<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Table<'s>> {
             separated_list0(
                 tok_tag(","),
                 pair(
-                    opt(terminated(
-                        alt((
+                    opt(alt((
+                        terminated(
                             map(
                                 delimited(tok_tag("["), parse_expr, expect_tok_tag!("]")),
                                 |e| TableKey::Expr(e),
                             ),
-                            map(parse_ident, |i| TableKey::Ident(i)),
-                        )),
-                        expect_tok_tag!("="),
-                    )),
+                            expect_tok_tag!("="),
+                        ),
+                        terminated(map(parse_ident, |i| TableKey::Ident(i)), tok_tag("=")),
+                    ))),
                     parse_expr,
                 ),
             ),

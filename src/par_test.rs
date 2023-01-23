@@ -29,7 +29,7 @@ test_par!(
     test_table,
     r"
 let foo = {
-    { abc = 'something', 123, 123 },
+    { abc = 'something', asd, 123 },
     { [2] = 'something', 1, 123 },
     { [asd] = 'other', 123, 544 }
 };
