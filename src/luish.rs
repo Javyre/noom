@@ -24,6 +24,7 @@ pub enum Stmt<'s> {
         it: Expr<'s>,
         body: Vec<Stmt<'s>>,
     },
+    Break,
 }
 
 pub enum TableKey<'s> {
@@ -349,6 +350,7 @@ fn luify_stmt<'s>(s: &mut State, out: &mut Stmts<'s>, stmt: par::Stmt<'s>) {
                 body: body_out,
             })
         }
+        par::Stmt::Break => out.push(Stmt::Break),
     }
 }
 

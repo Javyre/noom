@@ -236,6 +236,7 @@ pub fn emit_stmt<'s>(
             write!(out, "return ")?;
             emit_expr(out, indent, val)?;
         }
+        luish::Stmt::Break => write!(out, "break")?,
     }
     Ok(())
 }

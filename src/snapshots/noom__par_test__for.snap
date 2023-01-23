@@ -1,6 +1,6 @@
 ---
 source: src/par_test.rs
-expression: "parse_snap(r\"\nfor (i in ipairs(list)) .{\n    body\n};\n\")"
+expression: "parse_snap(r\"\nfor (i in ipairs(list)) .{\n    break;\n};\n\")"
 ---
 stmts:
   - For:
@@ -24,12 +24,8 @@ stmts:
                   fragment: list
       body:
         Block:
-          stmts: []
-          ret:
-            Ident:
-              span:
-                line: 3
-                col: 5
-                fragment: body
+          stmts:
+            - Break
+          ret: ~
 ret: ~
 

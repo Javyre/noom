@@ -216,6 +216,7 @@ pub enum Stmt<'s> {
         body: Expr<'s>,
     },
     Expr(Expr<'s>),
+    Break,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -814,6 +815,7 @@ fn parse_stmt<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
     alt((
         parse_let,
         parse_for,
+        map(tok_tag("break"), |_| Stmt::Break),
         parse_assign,
         map(parse_expr, |e| Stmt::Expr(e)),
     ))(i)

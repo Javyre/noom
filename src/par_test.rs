@@ -98,7 +98,7 @@ test_par!(
     test_for,
     r"
 for (i in ipairs(list)) .{
-    body
+    break;
 };
 "
 );
