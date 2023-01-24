@@ -231,6 +231,7 @@ pub enum Expr<'s> {
     Error,
     Ident(Ident<'s>),
     Path(Box<Expr<'s>>, Vec<Ident<'s>>),
+    Method(Box<Expr<'s>>, Ident<'s>),
     Number(Number<'s>),
     String(Span<'s>, QuoteType),
     Tag(Span<'s>),
@@ -694,6 +695,30 @@ fn parse_expr_unary_postfix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s
         if let Some(ids) = ids {
             outer_i = i;
             e = Expr::Path(Box::new(e), ids);
+            continue;
+        }
+
+        //
+        // Method Call
+        //
+        let (i, id_args) = opt(preceded(
+            tok_tag("->"),
+            pair(
+                expect(parse_ident, "exptected identifier"),
+                delimited(
+                    expect_tok_tag!("("),
+                    separated_list0(tok_tag(","), parse_expr),
+                    expect_tok_tag!(")"),
+                ),
+            ),
+        ))(i)?;
+        if let Some((id, args)) = id_args {
+            outer_i = i;
+            e = match id {
+                Some(id) => Expr::Method(Box::new(e), id),
+                None => Expr::Error,
+            };
+            e = Expr::Call(Box::new(e), args);
             continue;
         }
 

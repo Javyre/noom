@@ -60,6 +60,11 @@ fn emit_expr<'s>(out: &mut impl Write, mut indent: u16, expr: luish::Expr) -> st
             emit_expr(out, indent, *rhs)?;
             write!(out, ")")?;
         }
+        luish::Expr::Method(expr, id) => {
+            emit_expr(out, indent, *expr)?;
+            write!(out, ":")?;
+            emit_ident(out, id)?;
+        }
         luish::Expr::Call(fn_expr, args) => emit_call(out, indent, *fn_expr, args)?,
         luish::Expr::Func(args, body) => {
             write!(out, "function (")?;
