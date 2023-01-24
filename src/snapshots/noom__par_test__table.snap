@@ -12,15 +12,15 @@ stmts:
       - Table:
           span:
             line: 2
-            col: 10
-            fragment: " {\n    { abc = 'something', asd, 123 },\n    { [2] = 'something', 1, 123 },\n    { [asd] = 'other', 123, 544 }\n}"
+            col: 11
+            fragment: "{\n    { abc = 'something', asd, 123 },\n    { [2] = 'something', 1, 123 },\n    { [asd] = 'other', 123, 544 }\n}"
           entries:
             - - ~
               - Table:
                   span:
-                    line: 2
-                    col: 12
-                    fragment: "\n    { abc = 'something', asd, 123 }"
+                    line: 3
+                    col: 5
+                    fragment: "{ abc = 'something', asd, 123 }"
                   entries:
                     - - Ident:
                           span:
@@ -47,9 +47,9 @@ stmts:
             - - ~
               - Table:
                   span:
-                    line: 3
-                    col: 37
-                    fragment: "\n    { [2] = 'something', 1, 123 }"
+                    line: 4
+                    col: 5
+                    fragment: "{ [2] = 'something', 1, 123 }"
                   entries:
                     - - Expr:
                           Number:
@@ -77,9 +77,9 @@ stmts:
             - - ~
               - Table:
                   span:
-                    line: 4
-                    col: 35
-                    fragment: "\n    { [asd] = 'other', 123, 544 }"
+                    line: 5
+                    col: 5
+                    fragment: "{ [asd] = 'other', 123, 544 }"
                   entries:
                     - - Expr:
                           Ident:

@@ -7,7 +7,7 @@ use nom::{
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     Slice,
 };
-use nom_locate::LocatedSpan;
+use nom_locate::{position, LocatedSpan};
 use serde::ser::{SerializeStruct, Serializer};
 use serde::Serialize;
 use std::{cell::RefCell, marker::PhantomData};
@@ -740,10 +740,13 @@ fn parse_expr_unary_prefix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>
 }
 
 macro_rules! defn_parse_lassoc {
+    (@alt, $op:expr) => ( $op );
+    (@alt, $($ops:expr),+) => ( alt(($($ops),+)) );
+
     ($name:ident, term: $term_parser:expr, [$($ops:expr),+]) => {
         fn $name<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
             let (i, a) = $term_parser(i)?;
-            let (i, op) = opt(tok(alt(($(tag($ops)),+))))(i)?;
+            let (i, op) = opt(tok(defn_parse_lassoc!(@alt, $(tag($ops)),+)))(i)?;
 
             if let Some(op) = op {
                 let (i, b) = expect($name, "missing right hand side expression")(i)?;
@@ -759,7 +762,35 @@ macro_rules! defn_parse_lassoc {
     };
 }
 
-defn_parse_lassoc!(parse_expr_factor, term: parse_expr_unary_prefix, ["*", "/"]);
+// |> is syntax sugar. No actual new node type.
+// `a |> b() |> c()` becomes `c(b(a))`
+fn parse_expr_pipe<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
+    let (i, terms) =
+        separated_list1(tok_tag("|>"), pair(tok(position), parse_expr_unary_prefix))(i)?;
+    Ok((
+        i,
+        terms
+            .into_iter()
+            .reduce(|(dummy_pos, acc), next| match next {
+                (_, Expr::Call(func, mut args)) => {
+                    args.push(acc);
+                    (dummy_pos, Expr::Call(func, args))
+                }
+                (pos, _) => {
+                    i.extra.borrow_mut().errs.push(Error(
+                        Level::Error,
+                        pos.into(),
+                        "expected function call as rhs to pipe operator.",
+                    ));
+                    (dummy_pos, Expr::Error)
+                }
+            })
+            .unwrap()
+            .1,
+    ))
+}
+
+defn_parse_lassoc!(parse_expr_factor, term: parse_expr_pipe, ["*", "/"]);
 defn_parse_lassoc!(parse_expr_term, term: parse_expr_factor, ["+", "-"]);
 defn_parse_lassoc!(
     parse_expr_comparison,

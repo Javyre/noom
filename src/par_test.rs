@@ -102,3 +102,12 @@ for (i in ipairs(list)) .{
 };
 "
 );
+
+test_par!(
+    test_pipe,
+    r"
+a
+|> print()
+|> pass();
+"
+);

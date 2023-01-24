@@ -228,22 +228,17 @@ fn luify_expr<'s, 't>(
             );
             fulfill_target(s, out, unop, target)
         }
-        par::Expr::BinaryOp(lhs, op, rhs) => {
-            let binop = Expr::BinaryOp(
-                Box::new(luify_expr_val(s, out, *lhs)),
-                match *op.fragment() {
-                    "+" => "+",
-                    "-" => "-",
-                    "*" => "*",
-                    "/" => "/",
-                    "and" => "and",
-                    "or" => "or",
-                    _ => unreachable!("unimplemented binary operator translation"),
-                },
-                Box::new(luify_expr_val(s, out, *rhs)),
-            );
-            fulfill_target(s, out, binop, target)
-        }
+        par::Expr::BinaryOp(lhs, op, rhs) => match *op.fragment() {
+            op @ ("+" | "-" | "*" | "/" | "and" | "or") => {
+                let binop = Expr::BinaryOp(
+                    Box::new(luify_expr_val(s, out, *lhs)),
+                    op,
+                    Box::new(luify_expr_val(s, out, *rhs)),
+                );
+                fulfill_target(s, out, binop, target)
+            }
+            _ => unreachable!("unimplemented binary operator translation"),
+        },
         par::Expr::Block(par::Block { stmts, ret }) => {
             let mut body_stmts = Vec::new();
 

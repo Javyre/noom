@@ -1,0 +1,25 @@
+---
+source: src/par_test.rs
+expression: "parse_snap(r\"\na\n|> print()\n|> pass();\n\")"
+---
+stmts:
+  - Expr:
+      Call:
+        - Ident:
+            span:
+              line: 4
+              col: 4
+              fragment: pass
+        - - Call:
+              - Ident:
+                  span:
+                    line: 3
+                    col: 4
+                    fragment: print
+              - - Ident:
+                    span:
+                      line: 2
+                      col: 1
+                      fragment: a
+ret: ~
+
