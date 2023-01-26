@@ -23,7 +23,14 @@ fn emit_call<'s>(
     fn_expr: luish::Expr,
     args: Vec<luish::Expr>,
 ) -> std::io::Result<()> {
-    emit_expr(out, indent, fn_expr)?;
+    match fn_expr {
+        fn_expr @ luish::Expr::Func(..) => {
+            write!(out, "(")?;
+            emit_expr(out, indent, fn_expr)?;
+            write!(out, ")")?;
+        }
+        fn_expr => emit_expr(out, indent, fn_expr)?,
+    }
     write!(out, "(")?;
 
     let args_len = args.len();
