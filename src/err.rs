@@ -2,6 +2,7 @@ use std::{
     any::{Any, TypeId},
     fmt::Display,
     io::Write,
+    ops::Range,
 };
 
 use owo_colors::{OwoColorize, Style};
@@ -113,37 +114,51 @@ impl Error {
     }
 }
 
-fn underline(out: &mut (impl Write + Any), file: &str, loc: Location) -> std::io::Result<()> {
+fn find_line_range(file: &str, offset: usize) -> Range<usize> {
+    let last_byte = file.len() - 1;
+    let offset = std::cmp::min(offset, last_byte);
+    let mut beg = 0;
+    let mut end = file.len();
+
+    for i in (0..=std::cmp::max(offset as isize - 1, 0) as usize).rev() {
+        match file.as_bytes()[i] {
+            b'\n' | b'\r' => {
+                beg = i + 1;
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    for i in offset..=last_byte {
+        match file.as_bytes()[i] {
+            b'\n' | b'\r' => {
+                end = i;
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    beg..end
+}
+
+fn underline(out: &mut (impl Write + Any), file: &str, mut loc: Location) -> std::io::Result<()> {
     // TODO: implement multi-line locations?
 
-    // Find beggining and end of line.
-    let line_begin = file[0..loc.offset as usize]
-        .char_indices()
-        .into_iter()
-        .rev()
-        .find(|&(_, c)| c == '\n' || c == '\r')
-        .map(|(i, _)| i + 1)
-        .unwrap_or(0);
-    let line_end = (loc.offset + loc.len - 1) as usize
-        + file[(loc.offset + loc.len - 1) as usize..]
-            .char_indices()
-            .into_iter()
-            .find(|&(_, c)| c == '\n' || c == '\r')
-            .map(|(i, _)| i)
-            .unwrap_or(file[(loc.offset + loc.len - 1) as usize..].len());
-
-    write!(out, "| {}\n", &file[line_begin..line_end])?;
+    let snippet = &file[find_line_range(file, loc.offset as usize)];
 
     let underline_style = Style::new().green().bold();
-    let underline = format!("{0:^<1$}", "", (loc.len as usize).max(1));
+    let underline = format!("{0:^<1$}", "", (loc.len as usize).min(1).max(1));
+    let underline = underline.maybe_style(out, underline_style);
 
-    write!(
-        out,
-        "| {0: <1$}{2}\n",
-        "",
-        loc.col as usize - 1,
-        underline.maybe_style(out, underline_style)
-    )?;
+    // sometimes EOF is reported as one char after the actual last_char.
+    if loc.offset == file.len() as u32 {
+        loc.col = snippet.len() as u32 + 1;
+    }
+
+    write!(out, "| {}\n", snippet)?;
+    write!(out, "| {0: <1$}{2}\n", "", loc.col as usize - 1, underline)?;
 
     Ok(())
 }

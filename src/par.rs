@@ -296,7 +296,7 @@ fn expect<'s: 't, 't, O>(
             i.extra
                 .borrow_mut()
                 .errs
-                .push(Error(Level::Error, i.slice(0..1).into(), err_msg));
+                .push(Error(Level::Error, i.slice(0..0).into(), err_msg));
             Ok((i, None))
         }
         Err(e) => Err(e),
