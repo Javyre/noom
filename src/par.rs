@@ -204,6 +204,12 @@ pub struct Block<'s> {
 }
 
 #[derive(Debug, PartialEq, Serialize)]
+pub enum ForIterator<'s> {
+    Expr(Expr<'s>),
+    Range(Expr<'s>, Expr<'s>, Option<Expr<'s>>),
+}
+
+#[derive(Debug, PartialEq, Serialize)]
 pub enum Stmt<'s> {
     Error,
     Let(Ident<'s>, Option<Type<'s>>, Expr<'s>),
@@ -212,7 +218,7 @@ pub enum Stmt<'s> {
     For {
         it_var: Ident<'s>,
         it_type: Option<Type<'s>>,
-        it: Expr<'s>,
+        it: ForIterator<'s>,
         body: Expr<'s>,
     },
     Expr(Expr<'s>),
@@ -896,7 +902,26 @@ fn parse_for<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
         }),
     ))(i)?;
     let (i, _) = expect_tok_tag!("in")(i)?;
-    let (i, it) = parse_expr(i)?;
+    let (i, it) = alt((
+        map(
+            preceded(
+                tok_tag("@range"),
+                delimited(
+                    tok_tag("("),
+                    tuple((
+                        expect(parse_expr, "exptected range begin"),
+                        preceded(tok_tag(","), expect(parse_expr, "exptected range end")),
+                        opt(preceded(tok_tag(","), parse_expr)),
+                    )),
+                    tok_tag(")"),
+                ),
+            ),
+            |(beg, end, step)| {
+                ForIterator::Range(beg.unwrap_or(Expr::Error), end.unwrap_or(Expr::Error), step)
+            },
+        ),
+        map(parse_expr, |e| ForIterator::Expr(e)),
+    ))(i)?;
     let (i, _) = expect_tok_tag!(")")(i)?;
     let (i, body) = parse_expr(i)?;
 

@@ -227,8 +227,22 @@ pub fn emit_stmt<'s>(
         luish::Stmt::For { it_var, it, body } => {
             write!(out, "for ")?;
             emit_ident(out, it_var)?;
-            write!(out, " in ")?;
-            emit_expr(out, indent, it)?;
+            match it {
+                luish::ForIterator::Expr(it) => {
+                    write!(out, " in ")?;
+                    emit_expr(out, indent, it)?;
+                }
+                luish::ForIterator::Range(beg, end, step) => {
+                    write!(out, " = ")?;
+                    emit_expr(out, indent, beg)?;
+                    write!(out, ", ")?;
+                    emit_expr(out, indent, end)?;
+                    if let Some(step) = step {
+                        write!(out, ", ")?;
+                        emit_expr(out, indent, step)?;
+                    }
+                }
+            }
             write!(out, " do")?;
             indent += 1;
 

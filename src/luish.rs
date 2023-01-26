@@ -9,6 +9,11 @@ pub enum Ident<'s> {
     Id(u32),
 }
 
+pub enum ForIterator<'s> {
+    Expr(Expr<'s>),
+    Range(Expr<'s>, Expr<'s>, Option<Expr<'s>>),
+}
+
 pub enum Stmt<'s> {
     Call(Expr<'s>, Vec<Expr<'s>>),
     Local(Ident<'s>, Option<Expr<'s>>),
@@ -21,7 +26,7 @@ pub enum Stmt<'s> {
     },
     For {
         it_var: Ident<'s>,
-        it: Expr<'s>,
+        it: ForIterator<'s>,
         body: Vec<Stmt<'s>>,
     },
     Break,
@@ -359,7 +364,14 @@ fn luify_stmt<'s>(s: &mut State, out: &mut Stmts<'s>, stmt: par::Stmt<'s>) {
             it_var, it, body, ..
         } => {
             let it_var = luify_ident(it_var);
-            let it = luify_expr_val(s, out, it);
+            let it = match it {
+                par::ForIterator::Expr(it) => ForIterator::Expr(luify_expr_val(s, out, it)),
+                par::ForIterator::Range(beg, end, step) => ForIterator::Range(
+                    luify_expr_val(s, out, beg),
+                    luify_expr_val(s, out, end),
+                    step.map(|step| luify_expr_val(s, out, step)),
+                ),
+            };
 
             let mut body_out = Vec::new();
             luify_expr_stmts(s, &mut body_out, body, Target::None);
