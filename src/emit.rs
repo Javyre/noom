@@ -98,32 +98,36 @@ fn emit_expr<'s>(out: &mut impl Write, mut indent: u16, expr: luish::Expr) -> st
             write!(out, "end")?;
         }
         luish::Expr::Table(entries) => {
-            write!(out, "{{")?;
-            indent += 1;
-            emit_newline(out, indent)?;
+            if entries.is_empty() {
+                write!(out, "{{}}")?;
+            } else {
+                write!(out, "{{")?;
+                indent += 1;
+                emit_newline(out, indent)?;
 
-            let entries_len = entries.len();
-            for (i, (key, val)) in entries.into_iter().enumerate() {
-                if let Some(key) = key {
-                    match key {
-                        luish::TableKey::Ident(id) => emit_ident(out, id)?,
-                        luish::TableKey::Expr(expr) => {
-                            write!(out, "[")?;
-                            emit_expr(out, indent, expr)?;
-                            write!(out, "]")?;
+                let entries_len = entries.len();
+                for (i, (key, val)) in entries.into_iter().enumerate() {
+                    if let Some(key) = key {
+                        match key {
+                            luish::TableKey::Ident(id) => emit_ident(out, id)?,
+                            luish::TableKey::Expr(expr) => {
+                                write!(out, "[")?;
+                                emit_expr(out, indent, expr)?;
+                                write!(out, "]")?;
+                            }
                         }
+                        write!(out, " = ")?;
                     }
-                    write!(out, " = ")?;
+                    emit_expr(out, indent, val)?;
+                    if i < entries_len - 1 {
+                        write!(out, ",")?;
+                        emit_newline(out, indent)?;
+                    }
                 }
-                emit_expr(out, indent, val)?;
-                if i < entries_len - 1 {
-                    write!(out, ",")?;
-                    emit_newline(out, indent)?;
-                }
+                indent -= 1;
+                emit_newline(out, indent)?;
+                write!(out, "}}")?;
             }
-            indent -= 1;
-            emit_newline(out, indent)?;
-            write!(out, "}}")?;
         }
         luish::Expr::String(str, par::QuoteType::Double) => write!(out, "\"{str}\"")?,
         luish::Expr::String(str, par::QuoteType::Single) => write!(out, "\'{str}\'")?,
