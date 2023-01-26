@@ -395,6 +395,17 @@ macro_rules! expect_tok_tag {
     };
 }
 
+macro_rules! separated_list0_trail {
+    ($sep:expr, $elt:expr) => {
+        terminated(separated_list0($sep, $elt), opt($sep))
+    };
+}
+macro_rules! separated_list1_trail {
+    ($sep:expr, $elt:expr) => {
+        terminated(separated_list1($sep, $elt), opt($sep))
+    };
+}
+
 fn parse_type_primary<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Type<'s>> {
     alt((
         map(
@@ -403,7 +414,7 @@ fn parse_type_primary<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Type<'s>> {
                 map(
                     opt(delimited(
                         tok_tag("<"),
-                        separated_list1(tok_tag(","), parse_type),
+                        separated_list1_trail!(tok_tag(","), parse_type),
                         expect_tok_tag!(">"),
                     )),
                     |args| match args {
@@ -418,7 +429,7 @@ fn parse_type_primary<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Type<'s>> {
             pair(
                 delimited(
                     tok_tag("("),
-                    separated_list0(tok_tag(","), parse_type),
+                    separated_list0_trail!(tok_tag(","), parse_type),
                     expect_tok_tag!(")"),
                 ),
                 preceded(expect_tok_tag!(":"), parse_type),
@@ -428,12 +439,12 @@ fn parse_type_primary<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Type<'s>> {
         map(
             delimited(
                 tok_tag("{"),
-                separated_list0(
+                separated_list0_trail!(
                     tok_tag(","),
                     alt((
                         map(parse_type, |t| (None, t)),
                         separated_pair(map(parse_ident, |i| Some(i)), tok_tag(":"), parse_type),
-                    )),
+                    ))
                 ),
                 expect_tok_tag!("}"),
             ),
@@ -514,7 +525,7 @@ fn parse_table<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Table<'s>> {
     map(
         consumed(delimited(
             tok_tag("{"),
-            separated_list0(
+            separated_list0_trail!(
                 tok_tag(","),
                 pair(
                     opt(alt((
@@ -528,7 +539,7 @@ fn parse_table<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Table<'s>> {
                         terminated(map(parse_ident, |i| TableKey::Ident(i)), tok_tag("=")),
                     ))),
                     parse_expr,
-                ),
+                )
             ),
             expect_tok_tag!("}"),
         )),
@@ -544,7 +555,7 @@ fn parse_table<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Table<'s>> {
 fn parse_defn_args<'s, 't>(
     i: ISpan<'s, 't>,
 ) -> IResult<'s, 't, Vec<(Ident<'s>, Option<Type<'s>>)>> {
-    separated_list0(
+    separated_list0_trail!(
         tok_tag(","),
         pair(
             parse_ident,
@@ -554,7 +565,7 @@ fn parse_defn_args<'s, 't>(
                     t.unwrap_or(Type::Error)
                 }),
             )),
-        ),
+        )
     )(i)
 }
 fn parse_func<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
@@ -687,7 +698,7 @@ fn parse_expr_unary_postfix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s
         //
         let (i, args) = opt(delimited(
             tok_tag("("),
-            separated_list0(tok_tag(","), parse_expr),
+            separated_list0_trail!(tok_tag(","), parse_expr),
             expect_tok_tag!(")"),
         ))(i)?;
 
@@ -730,7 +741,7 @@ fn parse_expr_unary_postfix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s
                 expect(parse_ident, "exptected identifier"),
                 delimited(
                     expect_tok_tag!("("),
-                    separated_list0(tok_tag(","), parse_expr),
+                    separated_list0_trail!(tok_tag(","), parse_expr),
                     expect_tok_tag!(")"),
                 ),
             ),
@@ -908,11 +919,14 @@ fn parse_for<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
                 tok_tag("@range"),
                 delimited(
                     tok_tag("("),
-                    tuple((
-                        expect(parse_expr, "exptected range begin"),
-                        preceded(tok_tag(","), expect(parse_expr, "exptected range end")),
-                        opt(preceded(tok_tag(","), parse_expr)),
-                    )),
+                    terminated(
+                        tuple((
+                            expect(parse_expr, "exptected range begin"),
+                            preceded(tok_tag(","), expect(parse_expr, "exptected range end")),
+                            opt(preceded(tok_tag(","), parse_expr)),
+                        )),
+                        opt(tok_tag(",")),
+                    ),
                     tok_tag(")"),
                 ),
             ),
