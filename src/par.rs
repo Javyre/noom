@@ -798,11 +798,9 @@ defn_parse_lassoc!(
     term: parse_expr_concat,
     [">", ">=", "<", "<="]
 );
-defn_parse_lassoc!(
-    parse_expr_equality,
-    term: parse_expr_comparison,
-    ["==", "!="]
-);
+defn_parse_lassoc!(parse_expr_and, term: parse_expr_comparison, ["and"]);
+defn_parse_lassoc!(parse_expr_or, term: parse_expr_and, ["or"]);
+defn_parse_lassoc!(parse_expr_equality, term: parse_expr_or, ["==", "!="]);
 
 fn parse_expr<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     parse_expr_equality(i)
