@@ -160,6 +160,14 @@ fn luify_expr<'s, 't>(
             let mut body_out = Vec::new();
             luify_expr_stmts(s, &mut body_out, *body, Target::Return);
 
+            // Remove redundant return
+            match body_out.last() {
+                Some(Stmt::Return(None)) => {
+                    body_out.pop();
+                }
+                _ => {}
+            }
+
             fulfill_target(
                 s,
                 out,
