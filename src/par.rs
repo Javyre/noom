@@ -792,9 +792,10 @@ fn parse_expr_pipe<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
 
 defn_parse_lassoc!(parse_expr_factor, term: parse_expr_pipe, ["*", "/"]);
 defn_parse_lassoc!(parse_expr_term, term: parse_expr_factor, ["+", "-"]);
+defn_parse_lassoc!(parse_expr_concat, term: parse_expr_term, [".."]);
 defn_parse_lassoc!(
     parse_expr_comparison,
-    term: parse_expr_term,
+    term: parse_expr_concat,
     [">", ">=", "<", "<="]
 );
 defn_parse_lassoc!(
