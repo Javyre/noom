@@ -29,9 +29,9 @@ test_par!(
     test_table,
     r"
 let foo = {
-    { abc = 'something', asd, 123 },
-    { [2] = 'something', 1, 123 },
-    { [asd] = 'other', 123, 544 }
+    { abc: 'something', asd, 123 },
+    { [2]: 'something', 1, 123 },
+    { [asd]: 'other', 123, 544 }
 };
 "
 );
