@@ -608,7 +608,10 @@ fn parse_string<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, (ISpan<'s, 't>, Quo
         map(
             delimited(
                 tag("\""),
-                recognize(many0_count(alt((is_not("\"\\"), tag("\\\""))))),
+                recognize(many0_count(alt((
+                    is_not("\"\\"),
+                    recognize(pair(tag("\\"), take(1usize))),
+                )))),
                 expect(tag("\""), "expected closing string double-quote"),
             ),
             |s| (s, QuoteType::Double),
@@ -616,7 +619,10 @@ fn parse_string<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, (ISpan<'s, 't>, Quo
         map(
             delimited(
                 tag("'"),
-                recognize(many0_count(alt((is_not("'\\"), tag("\\'"))))),
+                recognize(many0_count(alt((
+                    is_not("'\\"),
+                    recognize(pair(tag("\\"), take(1usize))),
+                )))),
                 expect(tag("'"), "expected closing string quote"),
             ),
             |s| (s, QuoteType::Single),
