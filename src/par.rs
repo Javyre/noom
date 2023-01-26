@@ -686,6 +686,17 @@ fn parse_expr_unary_postfix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s
         }
 
         //
+        // Fn Call (string arg)
+        //
+        let (i, arg) = opt(map(parse_string, |(s, q)| Expr::String(s.into(), q)))(i)?;
+
+        if let Some(arg) = arg {
+            outer_i = i;
+            e = Expr::Call(Box::new(e), vec![arg]);
+            continue;
+        }
+
+        //
         // Path
         //
         let (i, ids) = opt(preceded(
