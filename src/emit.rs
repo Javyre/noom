@@ -49,6 +49,12 @@ fn emit_expr<'s>(out: &mut impl Write, mut indent: u16, expr: luish::Expr) -> st
                 emit_ident(out, id)?;
             }
         }
+        luish::Expr::Index(expr, idx) => {
+            emit_expr(out, indent, *expr)?;
+            write!(out, "[")?;
+            emit_expr(out, indent, *idx)?;
+            write!(out, "]")?;
+        }
         luish::Expr::UnaryOp(op, expr) => {
             write!(out, "{op} ")?;
             emit_expr(out, indent, *expr)?;

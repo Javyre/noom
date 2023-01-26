@@ -237,6 +237,7 @@ pub enum Expr<'s> {
     Error,
     Ident(Ident<'s>),
     Path(Box<Expr<'s>>, Vec<Ident<'s>>),
+    Index(Box<Expr<'s>>, Box<Expr<'s>>),
     Method(Box<Expr<'s>>, Ident<'s>),
     Number(Number<'s>),
     String(Span<'s>, QuoteType),
@@ -733,6 +734,16 @@ fn parse_expr_unary_postfix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s
         }
 
         //
+        // Index
+        //
+        let (i, idx) = opt(delimited(tok_tag("["), parse_expr, tok_tag("]")))(i)?;
+        if let Some(idx) = idx {
+            outer_i = i;
+            e = Expr::Index(Box::new(e), Box::new(idx));
+            continue;
+        }
+
+        //
         // Method Call
         //
         let (i, id_args) = opt(preceded(
@@ -884,7 +895,7 @@ fn parse_assign_or_expr<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
         Some(eq) => {
             // Validate assignable expr
             let target = match target {
-                Expr::Path(..) | Expr::Ident(..) => target,
+                Expr::Path(..) | Expr::Index(..) | Expr::Ident(..) => target,
                 _ => {
                     i.extra.borrow_mut().errs.push(Error(
                         Level::Error,

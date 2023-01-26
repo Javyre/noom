@@ -42,6 +42,7 @@ pub enum Expr<'s> {
     String(&'s str, par::QuoteType),
     Ident(Ident<'s>),
     Path(Box<Expr<'s>>, Vec<Ident<'s>>),
+    Index(Box<Expr<'s>>, Box<Expr<'s>>),
     Method(Box<Expr<'s>>, Ident<'s>),
     Verbatim(&'s str),
     Table(Vec<(Option<TableKey<'s>>, Expr<'s>)>),
@@ -190,6 +191,12 @@ fn luify_expr<'s, 't>(
             let ids = ids.into_iter().map(|id| luify_ident(id)).collect();
 
             fulfill_target(s, out, Expr::Path(Box::new(expr), ids), target)
+        }
+        par::Expr::Index(expr, idx) => {
+            let expr = luify_expr_val(s, out, *expr);
+            let idx = luify_expr_val(s, out, *idx);
+
+            fulfill_target(s, out, Expr::Index(Box::new(expr), Box::new(idx)), target)
         }
         par::Expr::Table(par::Table { entries, .. }) => {
             let table = Expr::Table(
