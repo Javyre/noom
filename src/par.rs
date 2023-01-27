@@ -489,14 +489,18 @@ fn parse_type<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Type<'s>> {
     parse_type_combination(i)
 }
 
-fn parse_ident<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Ident<'s>> {
-    tok(map(
+fn parse_ident_untok<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Ident<'s>> {
+    map(
         recognize(pair(
             alt((alpha1, tag("_"))),
             many0_count(alt((alphanumeric1, tag("_")))),
         )),
         |span: ISpan| Ident { span: span.into() },
-    ))(i)
+    )(i)
+}
+
+fn parse_ident<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Ident<'s>> {
+    tok(parse_ident_untok)(i)
 }
 
 #[test]
@@ -528,18 +532,40 @@ fn parse_table<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Table<'s>> {
             tok_tag("{"),
             separated_list0_trail!(
                 tok_tag(","),
-                pair(
-                    opt(alt((
-                        terminated(
-                            map(
-                                delimited(tok_tag("["), parse_expr, expect_tok_tag!("]")),
-                                |e| TableKey::Expr(e),
+                map(
+                    pair(
+                        opt(alt((
+                            terminated(
+                                map(
+                                    delimited(tok_tag(".["), parse_expr, expect_tok_tag!("]")),
+                                    |e| (TableKey::Expr(e), None),
+                                ),
+                                expect_tok_tag!(":"),
                             ),
-                            expect_tok_tag!(":"),
-                        ),
-                        terminated(map(parse_ident, |i| TableKey::Ident(i)), tok_tag(":")),
-                    ))),
-                    parse_expr,
+                            terminated(
+                                map(
+                                    pair(
+                                        preceded(pair(ws, tag(".")), parse_ident_untok),
+                                        opt(delimited(
+                                            tok_tag("("),
+                                            parse_defn_args,
+                                            expect_tok_tag!(")")
+                                        ))
+                                    ),
+                                    |(i, args)| (TableKey::Ident(i), args)
+                                ),
+                                tok_tag(":")
+                            ),
+                        ))),
+                        parse_expr,
+                    ),
+                    |(key, val)| match key {
+                        // FIXME: no way of declaring the return type of the function.
+                        Some((key, Some(args))) =>
+                            (Some(key), Expr::Func(args, Box::new(val), None)),
+                        Some((key, None)) => (Some(key), val),
+                        None => (None, val),
+                    }
                 )
             ),
             expect_tok_tag!("}"),
