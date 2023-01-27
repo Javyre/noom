@@ -2,7 +2,7 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take},
     character::complete::{alpha1, alphanumeric1, digit0, digit1, multispace1},
-    combinator::{all_consuming, consumed, eof, map, opt, peek, recognize, success, value},
+    combinator::{all_consuming, cond, consumed, eof, map, opt, peek, recognize, success, value},
     multi::{many0_count, many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     Slice,
@@ -719,6 +719,20 @@ fn parse_expr_primary<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     ))(i)
 }
 
+fn is_expr_callable(expr: &Expr) -> bool {
+    match expr {
+        Expr::Func(..) | Expr::Index(..) | Expr::Path(..) | Expr::Ident(..) => true,
+        _ => false,
+    }
+}
+
+fn is_expr_indexable(expr: &Expr) -> bool {
+    match expr {
+        Expr::Number(..) | Expr::Tag(..) | Expr::Error => false,
+        _ => true,
+    }
+}
+
 fn parse_expr_unary_postfix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     let (i, mut e) = parse_expr_primary(i)?;
 
@@ -729,13 +743,16 @@ fn parse_expr_unary_postfix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s
         //
         // Fn Call
         //
-        let (i, args) = opt(delimited(
-            tok_tag("("),
-            separated_list0_trail!(tok_tag(","), parse_expr),
-            expect_tok_tag!(")"),
-        ))(i)?;
+        let (i, args) = cond(
+            is_expr_callable(&e),
+            opt(delimited(
+                tok_tag("("),
+                separated_list0_trail!(tok_tag(","), parse_expr),
+                expect_tok_tag!(")"),
+            )),
+        )(i)?;
 
-        if let Some(args) = args {
+        if let Some(Some(args)) = args {
             outer_i = i;
             e = Expr::Call(Box::new(e), args);
             continue;
@@ -744,9 +761,12 @@ fn parse_expr_unary_postfix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s
         //
         // Fn Call (string arg)
         //
-        let (i, arg) = opt(map(parse_string, |(s, q)| Expr::String(s.into(), q)))(i)?;
+        let (i, arg) = cond(
+            is_expr_callable(&e),
+            opt(map(parse_string, |(s, q)| Expr::String(s.into(), q))),
+        )(i)?;
 
-        if let Some(arg) = arg {
+        if let Some(Some(arg)) = arg {
             outer_i = i;
             e = Expr::Call(Box::new(e), vec![arg]);
             continue;
@@ -755,11 +775,14 @@ fn parse_expr_unary_postfix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s
         //
         // Path
         //
-        let (i, ids) = opt(preceded(
-            tok_tag("."),
-            separated_list1(tok_tag("."), parse_ident),
-        ))(i)?;
-        if let Some(ids) = ids {
+        let (i, ids) = cond(
+            is_expr_indexable(&e),
+            opt(preceded(
+                tok_tag("."),
+                separated_list1(tok_tag("."), parse_ident),
+            )),
+        )(i)?;
+        if let Some(Some(ids)) = ids {
             outer_i = i;
             e = Expr::Path(Box::new(e), ids);
             continue;
@@ -768,8 +791,11 @@ fn parse_expr_unary_postfix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s
         //
         // Index
         //
-        let (i, idx) = opt(delimited(tok_tag("["), parse_expr, tok_tag("]")))(i)?;
-        if let Some(idx) = idx {
+        let (i, idx) = cond(
+            is_expr_indexable(&e),
+            opt(delimited(tok_tag("["), parse_expr, tok_tag("]"))),
+        )(i)?;
+        if let Some(Some(idx)) = idx {
             outer_i = i;
             e = Expr::Index(Box::new(e), Box::new(idx));
             continue;
@@ -778,18 +804,21 @@ fn parse_expr_unary_postfix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s
         //
         // Method Call
         //
-        let (i, id_args) = opt(preceded(
-            tok_tag("->"),
-            pair(
-                expect(parse_ident, "exptected identifier"),
-                delimited(
-                    expect_tok_tag!("("),
-                    separated_list0_trail!(tok_tag(","), parse_expr),
-                    expect_tok_tag!(")"),
+        let (i, id_args) = cond(
+            is_expr_indexable(&e),
+            opt(preceded(
+                tok_tag("->"),
+                pair(
+                    expect(parse_ident, "exptected identifier"),
+                    delimited(
+                        expect_tok_tag!("("),
+                        separated_list0_trail!(tok_tag(","), parse_expr),
+                        expect_tok_tag!(")"),
+                    ),
                 ),
-            ),
-        ))(i)?;
-        if let Some((id, args)) = id_args {
+            )),
+        )(i)?;
+        if let Some(Some((id, args))) = id_args {
             outer_i = i;
             e = match id {
                 Some(id) => Expr::Method(Box::new(e), id),
