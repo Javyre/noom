@@ -242,6 +242,7 @@ fn luify_expr<'s, 't>(
                 match *op.fragment() {
                     "!" => "not",
                     "-" => "-",
+                    "#" => "#",
                     _ => unimplemented!("unimplemented unary operator translation"),
                 },
                 Box::new(luify_expr_val(s, out, *expr)),

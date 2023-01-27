@@ -838,7 +838,10 @@ fn parse_expr_unary_postfix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s
 fn parse_expr_unary_prefix<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     alt((
         map(
-            pair(tok(alt((tag("-"), tag("!")))), parse_expr_unary_prefix),
+            pair(
+                tok(alt((tag("-"), tag("!"), tag("#")))),
+                parse_expr_unary_prefix,
+            ),
             |(o, e)| Expr::UnaryOp(o.into(), Box::new(e)),
         ),
         parse_expr_unary_postfix,
