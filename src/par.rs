@@ -598,17 +598,23 @@ fn parse_defn_args<'s, 't>(
 fn parse_func<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     let (i, args) = delimited(tok_tag(".("), parse_defn_args, expect_tok_tag!(")"))(i)?;
     let (i, ret_ty) = opt(preceded(
-        tok_tag(":"),
+        tok_tag("->"),
         map(expect(parse_type, "expected type"), |t| {
             t.unwrap_or(Type::Error)
         }),
     ))(i)?;
-    let (i, body) = delimited(
-        tok_tag("{"),
-        parse_block_body(tok_tag("}")),
-        expect_tok_tag!("}"),
-    )(i)?;
-    Ok((i, Expr::Func(args, Box::new(Expr::Block(body)), ret_ty)))
+    let (i, body) = alt((
+        preceded(tok_tag(":"), parse_expr),
+        map(
+            delimited(
+                tok_tag("{"),
+                parse_block_body(tok_tag("}")),
+                expect_tok_tag!("}"),
+            ),
+            |body| Expr::Block(body),
+        ),
+    ))(i)?;
+    Ok((i, Expr::Func(args, Box::new(body), ret_ty)))
 }
 
 fn parse_if<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
