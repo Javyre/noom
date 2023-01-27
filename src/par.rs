@@ -433,7 +433,7 @@ fn parse_type_primary<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Type<'s>> {
                     separated_list0_trail!(tok_tag(","), parse_type),
                     expect_tok_tag!(")"),
                 ),
-                preceded(expect_tok_tag!(":"), parse_type),
+                preceded(expect_tok_tag!("->"), parse_type),
             ),
             |(args, ret)| Type::Func(args, Box::new(ret)),
         ),
@@ -933,7 +933,7 @@ fn parse_let<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
         None => {
             let (i, args) = delimited(tok_tag("("), parse_defn_args, expect_tok_tag!(")"))(i)?;
             let (i, ret_ty) = opt(preceded(
-                tok_tag(":"),
+                tok_tag("->"),
                 map(expect(parse_type, "expected type"), |t| {
                     t.unwrap_or(Type::Error)
                 }),
