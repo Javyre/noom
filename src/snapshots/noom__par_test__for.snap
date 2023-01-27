@@ -11,17 +11,18 @@ stmts:
           fragment: i
       it_type: ~
       it:
-        Call:
-          - Ident:
-              span:
-                line: 2
-                col: 11
-                fragment: ipairs
-          - - Ident:
+        Expr:
+          Call:
+            - Ident:
                 span:
                   line: 2
-                  col: 18
-                  fragment: list
+                  col: 11
+                  fragment: ipairs
+            - - Ident:
+                  span:
+                    line: 2
+                    col: 18
+                    fragment: list
       body:
         Block:
           stmts:

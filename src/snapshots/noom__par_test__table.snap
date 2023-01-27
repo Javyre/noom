@@ -1,6 +1,6 @@
 ---
 source: src/par_test.rs
-expression: "parse_snap(r\"\nlet foo = {\n    { abc = 'something', asd, 123 },\n    { [2] = 'something', 1, 123 },\n    { [asd] = 'other', 123, 544 }\n};\n\")"
+expression: "parse_snap(r\"\nlet foo = {\n    { .abc: 'something', asd, 123 },\n    { .[2]: 'something', 1, 123 },\n    { .[asd]: 'other', 123, 544 }\n};\n\")"
 ---
 stmts:
   - Let:
@@ -13,19 +13,19 @@ stmts:
           span:
             line: 2
             col: 11
-            fragment: "{\n    { abc = 'something', asd, 123 },\n    { [2] = 'something', 1, 123 },\n    { [asd] = 'other', 123, 544 }\n}"
+            fragment: "{\n    { .abc: 'something', asd, 123 },\n    { .[2]: 'something', 1, 123 },\n    { .[asd]: 'other', 123, 544 }\n}"
           entries:
             - - ~
               - Table:
                   span:
                     line: 3
                     col: 5
-                    fragment: "{ abc = 'something', asd, 123 }"
+                    fragment: "{ .abc: 'something', asd, 123 }"
                   entries:
                     - - Ident:
                           span:
                             line: 3
-                            col: 7
+                            col: 8
                             fragment: abc
                       - String:
                           - line: 3
@@ -49,13 +49,13 @@ stmts:
                   span:
                     line: 4
                     col: 5
-                    fragment: "{ [2] = 'something', 1, 123 }"
+                    fragment: "{ .[2]: 'something', 1, 123 }"
                   entries:
                     - - Expr:
                           Number:
                             span:
                               line: 4
-                              col: 8
+                              col: 9
                               fragment: "2"
                       - String:
                           - line: 4
@@ -79,13 +79,13 @@ stmts:
                   span:
                     line: 5
                     col: 5
-                    fragment: "{ [asd] = 'other', 123, 544 }"
+                    fragment: "{ .[asd]: 'other', 123, 544 }"
                   entries:
                     - - Expr:
                           Ident:
                             span:
                               line: 5
-                              col: 8
+                              col: 9
                               fragment: asd
                       - String:
                           - line: 5

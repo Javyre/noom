@@ -1,6 +1,6 @@
 ---
 source: src/par_test.rs
-expression: "parse_snap(r\"\nlet f(a: number): number = a * 2;\n\")"
+expression: "parse_snap(r\"\nlet f(a: number) -> number = a * 2;\n\")"
 ---
 stmts:
   - Let:
@@ -23,19 +23,19 @@ stmts:
               - Ident:
                   span:
                     line: 2
-                    col: 28
+                    col: 30
                     fragment: a
               - line: 2
-                col: 30
+                col: 32
                 fragment: "*"
               - Number:
                   span:
                     line: 2
-                    col: 32
+                    col: 34
                     fragment: "2"
           - TypeIdent:
               - line: 2
-                col: 19
+                col: 21
                 fragment: number
               - []
 ret: ~
