@@ -361,14 +361,15 @@ fn luify_stmt<'s>(s: &mut State, out: &mut Stmts<'s>, stmt: par::Stmt<'s>) {
         par::Stmt::Let(id, _ty, val) => {
             let id = luify_ident(id);
             match val {
-                val @ par::Expr::Func(..) => {
+                Some(val @ par::Expr::Func(..)) => {
                     out.push(Stmt::Local(id, None));
                     luify_expr(s, out, val, Target::Assign(id));
                 }
-                val => {
+                Some(val) => {
                     let val = luify_expr_val(s, out, val);
                     out.push(Stmt::Local(id, Some(val)));
                 }
+                None => out.push(Stmt::Local(id, None)),
             }
         }
         par::Stmt::Assign(targ_expr, val) => {

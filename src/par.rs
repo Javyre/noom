@@ -212,7 +212,7 @@ pub enum ForIterator<'s> {
 #[derive(Debug, PartialEq, Serialize)]
 pub enum Stmt<'s> {
     Error,
-    Let(Ident<'s>, Option<Type<'s>>, Expr<'s>),
+    Let(Ident<'s>, Option<Type<'s>>, Option<Expr<'s>>),
     // TODO: implement paths 'some.thing.foo'
     Assign(Expr<'s>, Expr<'s>),
     For {
@@ -931,22 +931,30 @@ fn parse_let<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
     match eq_ty {
         Some((ty, _)) => {
             let (i, val) = parse_expr(i)?;
-            Ok((i, Stmt::Let(ident, ty, val)))
+            Ok((i, Stmt::Let(ident, ty, Some(val))))
         }
         None => {
-            let (i, args) = delimited(tok_tag("("), parse_defn_args, expect_tok_tag!(")"))(i)?;
-            let (i, ret_ty) = opt(preceded(
-                tok_tag("->"),
-                map(expect(parse_type, "expected type"), |t| {
-                    t.unwrap_or(Type::Error)
-                }),
+            let (i, args) = opt(delimited(
+                tok_tag("("),
+                parse_defn_args,
+                expect_tok_tag!(")"),
             ))(i)?;
-            let (i, _) = tok_tag("=")(i)?;
-            let (i, body) = parse_expr(i)?;
-            Ok((
-                i,
-                Stmt::Let(ident, None, Expr::Func(args, Box::new(body), ret_ty)),
-            ))
+            if let Some(args) = args {
+                let (i, ret_ty) = opt(preceded(
+                    tok_tag("->"),
+                    map(expect(parse_type, "expected type"), |t| {
+                        t.unwrap_or(Type::Error)
+                    }),
+                ))(i)?;
+                let (i, _) = tok_tag("=")(i)?;
+                let (i, body) = parse_expr(i)?;
+                Ok((
+                    i,
+                    Stmt::Let(ident, None, Some(Expr::Func(args, Box::new(body), ret_ty))),
+                ))
+            } else {
+                Ok((i, Stmt::Let(ident, None, None)))
+            }
         }
     }
 }
