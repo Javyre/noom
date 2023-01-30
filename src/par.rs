@@ -2,8 +2,10 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take},
     character::complete::{alpha1, alphanumeric1, digit0, digit1, multispace1},
-    combinator::{all_consuming, cond, consumed, eof, map, opt, peek, recognize, success, value},
-    multi::{many0_count, many1, separated_list0, separated_list1},
+    combinator::{
+        all_consuming, cond, consumed, eof, map, not, opt, peek, recognize, success, value,
+    },
+    multi::{count, many0_count, many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     Slice,
 };
@@ -230,6 +232,7 @@ pub enum Stmt<'s> {
 pub enum QuoteType {
     Double,
     Single,
+    Long(u8),
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -653,6 +656,22 @@ fn parse_if<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
     ))
 }
 
+fn parse_long_string<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, (ISpan<'s, 't>, QuoteType)> {
+    let (i, n) = delimited(tag("["), many0_count(tag("=")), tag("["))(i)?;
+
+    let parse_not_closing = preceded(
+        not(delimited(tag("]"), count(tag("="), n), tag("]"))),
+        take(1u8),
+    );
+
+    let (i, s) = recognize(many0_count(parse_not_closing))(i)?;
+    let (i, _) = expect(
+        delimited(tag("]"), count(tag("="), n), tag("]")),
+        "exptected closing delimiter of long string.",
+    )(i)?;
+    Ok((i, (s, QuoteType::Long(n as u8))))
+}
+
 fn parse_string<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, (ISpan<'s, 't>, QuoteType)> {
     tok(alt((
         map(
@@ -677,6 +696,7 @@ fn parse_string<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, (ISpan<'s, 't>, Quo
             ),
             |s| (s, QuoteType::Single),
         ),
+        parse_long_string,
     )))(i)
 }
 

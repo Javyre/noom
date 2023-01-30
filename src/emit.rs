@@ -138,6 +138,9 @@ fn emit_expr<'s>(out: &mut impl Write, mut indent: u16, expr: luish::Expr) -> st
         }
         luish::Expr::String(str, par::QuoteType::Double) => write!(out, "\"{str}\"")?,
         luish::Expr::String(str, par::QuoteType::Single) => write!(out, "\'{str}\'")?,
+        luish::Expr::String(str, par::QuoteType::Long(n)) => {
+            write!(out, "[{0:=<1$}[{str}]{0:=<1$}]", "", n as usize)?
+        }
         luish::Expr::Verbatim(str) => write!(out, "{str}")?,
     }
     Ok(())
