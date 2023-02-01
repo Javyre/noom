@@ -1,6 +1,6 @@
 ---
 source: src/par_test.rs
-expression: "parse_snap(r\"\nf = .(a: number) -> number { a * 2 };\n\")"
+expression: "parse_snap(r\"\nf = fn (a: number) -> number { a * 2 };\n\")"
 ---
 stmts:
   - Assign:
@@ -12,11 +12,11 @@ stmts:
       - Func:
           - - - span:
                   line: 2
-                  col: 7
+                  col: 9
                   fragment: a
               - TypeIdent:
                   - line: 2
-                    col: 10
+                    col: 12
                     fragment: number
                   - []
           - Block:
@@ -26,19 +26,19 @@ stmts:
                   - Ident:
                       span:
                         line: 2
-                        col: 30
+                        col: 32
                         fragment: a
                   - line: 2
-                    col: 32
+                    col: 34
                     fragment: "*"
                   - Number:
                       span:
                         line: 2
-                        col: 34
+                        col: 36
                         fragment: "2"
           - TypeIdent:
               - line: 2
-                col: 21
+                col: 23
                 fragment: number
               - []
 ret: ~

@@ -29,9 +29,9 @@ test_par!(
     test_table,
     r"
 let foo = {
-    { .abc: 'something', asd, 123 },
-    { .[2]: 'something', 1, 123 },
-    { .[asd]: 'other', 123, 544 }
+    { abc: 'something', asd, 123 },
+    { [2]: 'something', 1, 123 },
+    { [asd]: 'other', 123, 544 }
 };
 "
 );
@@ -39,7 +39,7 @@ let foo = {
 test_par!(
     test_func_assign,
     r"
-f = .(a: number) -> number { a * 2 };
+f = fn (a: number) -> number { a * 2 };
 "
 );
 
@@ -53,21 +53,21 @@ let f(a: number) -> number = a * 2;
 test_par!(
     test_func_let_2,
     r"
-let f = .(a: number) -> number { a * 2 };
+let f = fn (a: number) -> number { a * 2 };
 "
 );
 
 test_par!(
     test_func_let_3,
     r"
-let f: (number) -> number = .(a){ a * 2 };
+let f: (number) -> number = fn (a){ a * 2 };
 "
 );
 
 test_par!(
     test_func_let_4,
     r"
-let f = .(a: number) -> number: .{ a * 2 };
+let f = fn (a: number) -> number: .{ a * 2 };
 "
 );
 

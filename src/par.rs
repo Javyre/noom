@@ -540,7 +540,7 @@ fn parse_table<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Table<'s>> {
                         opt(alt((
                             terminated(
                                 map(
-                                    delimited(tok_tag(".["), parse_expr, expect_tok_tag!("]")),
+                                    delimited(tok_tag("["), parse_expr, expect_tok_tag!("]")),
                                     |e| (TableKey::Expr(e), None),
                                 ),
                                 expect_tok_tag!(":"),
@@ -548,15 +548,19 @@ fn parse_table<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Table<'s>> {
                             terminated(
                                 map(
                                     pair(
-                                        preceded(pair(ws, tag(".")), parse_ident_untok),
-                                        opt(delimited(
-                                            tok_tag("("),
+                                        preceded(tok_tag("fn"), parse_ident),
+                                        delimited(
+                                            expect_tok_tag!("("),
                                             parse_defn_args,
                                             expect_tok_tag!(")")
-                                        ))
+                                        )
                                     ),
-                                    |(i, args)| (TableKey::Ident(i), args)
+                                    |(i, args)| (TableKey::Ident(i), Some(args))
                                 ),
+                                expect_tok_tag!(":")
+                            ),
+                            terminated(
+                                map(parse_ident, |i| (TableKey::Ident(i), None)),
                                 tok_tag(":")
                             ),
                         ))),
@@ -599,7 +603,11 @@ fn parse_defn_args<'s, 't>(
     )(i)
 }
 fn parse_func<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Expr<'s>> {
-    let (i, args) = delimited(tok_tag(".("), parse_defn_args, expect_tok_tag!(")"))(i)?;
+    let (i, args) = delimited(
+        pair(tok_tag("fn"), expect_tok_tag!("(")),
+        parse_defn_args,
+        expect_tok_tag!(")"),
+    )(i)?;
     let (i, ret_ty) = opt(preceded(
         tok_tag("->"),
         map(expect(parse_type, "expected type"), |t| {
@@ -1065,7 +1073,7 @@ fn parse_stmt<'s, 't>(i: ISpan<'s, 't>) -> IResult<'s, 't, Stmt<'s>> {
     ))(i)
 }
 
-// Infallible (should be called once block has definitely begun via beginning of chunk or `.(){`, `.{`)
+// Infallible (should be called once block has definitely begun via beginning of chunk or `fn (){`, `.{`)
 fn parse_block_body<'s: 't, 't, O>(
     block_end: impl Copy + FnMut(ISpan<'s, 't>) -> IResult<'s, 't, O>,
 ) -> impl FnMut(ISpan<'s, 't>) -> IResult<'s, 't, Block<'s>> {
