@@ -62,6 +62,26 @@ let funny_number = .{
 // The following line would fail as those variables only exist inside the block.
 // print(a, b);
 ```
+
+###### If
+The if follows the syntax `if (cond_expr) body_expr [else else_expr]`.
+```typescript
+if (is_funny(funny_number)) .{
+    print(funny_number);
+} else .{
+    print('I think this joke is highly inappropirate');
+};
+
+// Or equivalently
+if (is_funny(funny_number))
+    print(funny_number)
+else
+    print('I think this joke is highly inappropirate');
+    
+// Don't forget that `if` is an expression:
+print(if (needs_sensoring(number) 0 else number);
+```
+
 ###### Functions
 ```typescript
 let callback = fn(){
