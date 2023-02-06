@@ -55,7 +55,7 @@ If there is no return expression, the value is `nil`.
 ```typescript
 let funny_number = .{
     let a = 58;
-    let b = 11;
+    let b = 12;
     a + b // The lack of terminating semicolon indicates this is the return value of the block
 };
 
@@ -66,20 +66,20 @@ let funny_number = .{
 ###### If
 The if follows the syntax `if (cond_expr) body_expr [else else_expr]`.
 ```typescript
-if (is_funny(funny_number)) .{
+if (is_printable(funny_number)) .{
     print(funny_number);
 } else .{
-    print('I think this joke is highly inappropirate');
+    print('That was not printable');
 };
 
 // Or equivalently
-if (is_funny(funny_number))
+if (is_printable(funny_number))
     print(funny_number)
 else
-    print('I think this joke is highly inappropirate');
+    print('That was not printable');
     
 // Don't forget that `if` is an expression:
-print(if (needs_sensoring(number) 0 else number);
+print(if (is_valid(number) 0 else number);
 ```
 
 ###### Functions
